@@ -23,7 +23,7 @@ namespace engine
 
     void ItemController::applyRotation()
     {
-        m_sceneNode->setRotation(xyzToYprRad(getRotation()) * 180 / irr::core::PI);
+        m_transform->setAttitude(xyzToQuat(getRotation()));
     }
 
     void ItemController::setTargetState(uint16_t st)
@@ -38,7 +38,7 @@ namespace engine
         return m_meshAnimationController->getTargetState();
     }
 
-    void ItemController::playAnimation(uint16_t anim, const boost::optional<irr::u32>& firstFrame)
+    void ItemController::playAnimation(uint16_t anim, const boost::optional<uint32_t>& firstFrame)
     {
         Expects(m_meshAnimationController != nullptr);
         m_meshAnimationController->playLocalAnimation(anim, firstFrame);
@@ -50,19 +50,26 @@ namespace engine
         m_meshAnimationController->advanceFrame();
     }
 
-    irr::u32 ItemController::getCurrentFrame() const
+    uint32_t ItemController::getCurrentFrame() const
     {
         Expects(m_meshAnimationController != nullptr);
         return m_meshAnimationController->getCurrentFrame();
     }
 
-    irr::u32 ItemController::getAnimEndFrame() const
+    uint32_t ItemController::getAnimEndFrame() const
     {
         Expects(m_meshAnimationController != nullptr);
         return m_meshAnimationController->getAnimEndFrame();
     }
 
-    ItemController::ItemController(const gsl::not_null<level::Level*>& level, const std::shared_ptr<engine::MeshAnimationController>& dispatcher, const gsl::not_null<irr::scene::ISceneNode*>& sceneNode, const std::string & name, const gsl::not_null<const loader::Room*>& room, gsl::not_null<loader::Item*> item, bool hasProcessAnimCommandsOverride, uint8_t characteristics)
+    ItemController::ItemController(const gsl::not_null<level::Level*>& level,
+                                   const std::shared_ptr<engine::MeshAnimationController>& dispatcher,
+                                   const gsl::not_null<std::shared_ptr<render::Entity>>& sceneNode,
+                                   const std::string& name,
+                                   const gsl::not_null<const loader::Room*>& room,
+                                   gsl::not_null<loader::Item*> item,
+                                   bool hasProcessAnimCommandsOverride,
+                                   uint8_t characteristics)
         : m_position(room, core::ExactTRCoordinates(item->position))
         , m_rotation(0_deg, core::Angle{ item->rotation }, 0_deg)
         , m_level(level)
@@ -95,12 +102,12 @@ namespace engine
         }
     }
 
-    irr::core::aabbox3di ItemController::getBoundingBox() const
+    osg::BoundingBoxImpl<osg::Vec3i> ItemController::getBoundingBox() const
     {
         if(m_meshAnimationController == nullptr)
         {
             BOOST_LOG_TRIVIAL(warning) << "Trying to get bounding box from non-animated item: " << getName();
-            return irr::core::aabbox3di(0, 0, 0, 0, 0, 0);
+            return osg::BoundingBoxImpl<osg::Vec3i>(0, 0, 0, 0, 0, 0);
         }
 
         Expects(m_meshAnimationController != nullptr);
@@ -115,27 +122,22 @@ namespace engine
         BOOST_LOG_TRIVIAL(debug) << "Room switch of " << m_name << " to " << newRoom->node->getName();
         if( newRoom == nullptr )
         {
-            BOOST_LOG_TRIVIAL(fatal) << "No room to switch to. Matching rooms by position:";
-            for( size_t i = 0; i < m_level->m_rooms.size(); ++i )
-            {
-                const loader::Room& room = m_level->m_rooms[i];
-                if( room.node->getTransformedBoundingBox().isPointInside(m_sceneNode->getAbsolutePosition()) )
-                {
-                    BOOST_LOG_TRIVIAL(fatal) << "  - " << i;
-                }
-            }
+            BOOST_LOG_TRIVIAL(fatal) << "No room to switch to.";
             return;
         }
 
         m_sceneNode->setParent(newRoom->node);
 
         m_position.room = newRoom;
-        for( irr::u32 i = 0; i < m_sceneNode->getMaterialCount(); ++i )
+#if 0
+        //! @todo
+        for( uint32_t i = 0; i < m_sceneNode->getMaterialCount(); ++i )
         {
             irr::video::SMaterial& material = m_sceneNode->getMaterial(i);
             const auto col = m_position.room->lightColor.toSColor(1 - m_position.room->darkness / 8191.0f);
             material.DiffuseColor = col;
         }
+#endif
     }
 
     uint16_t ItemController::getCurrentAnimationId() const
@@ -343,7 +345,7 @@ namespace engine
             return;
 
         static const InteractionLimits limits{
-            irr::core::aabbox3di{{-200, 0, 312}, {200, 0, 512}},
+            osg::BoundingBoxImpl<osg::Vec3i>{{-200, 0, 312}, {200, 0, 512}},
             {-10_deg,-30_deg,-10_deg},
             {+10_deg,+30_deg,+10_deg}
         };
@@ -398,20 +400,19 @@ namespace engine
             return false;
         }
 
-        irr::core::quaternion q;
-        q.makeIdentity();
-        q *= irr::core::quaternion().fromAngleAxis(item.getRotation().Y.toRad(), { 0,1,0 });
-        q *= irr::core::quaternion().fromAngleAxis(item.getRotation().X.toRad(), { -1,0,0 });
-        q *= irr::core::quaternion().fromAngleAxis(item.getRotation().Z.toRad(), { 0,0,-1 });
+        osg::Quat q;
+        q = q * osg::Quat(item.getRotation().Y.toRad(), osg::Vec3f{ 0,1,0 });
+        q = q * osg::Quat(item.getRotation().X.toRad(), osg::Vec3f{ -1,0,0 });
+        q = q * osg::Quat(item.getRotation().Z.toRad(), osg::Vec3f{ 0,0,-1 });
 
-        irr::core::matrix4 m = q.getMatrix();
+        osg::Matrix m(q);
 
         const auto dist = lara.getPosition() - item.getPosition();
         const auto dx = m(0, 0) * dist.X + m(0, 1) * dist.Y + m(0, 2) * dist.Z;
         const auto dy = m(1, 0) * dist.X + m(1, 1) * dist.Y + m(1, 2) * dist.Z;
         const auto dz = m(2, 0) * dist.X + m(2, 1) * dist.Y + m(2, 2) * dist.Z;
 
-        return distance.isPointInside(irr::core::vector3di(dx, dy, dz));
+        return distance.contains(osg::Vec3i(dx, dy, dz));
     }
 
     void ItemController_Door::onInteract(LaraController& /*lara*/)
@@ -423,7 +424,7 @@ namespace engine
     {
         if(getCurrentAnimState() == 0) // stationary
         {
-            if(!irr::core::equals(getPosition().Y - 512, getLevel().m_lara->getPosition().Y, 1.0f))
+            if(!osg::equivalent(getPosition().Y - 512, getLevel().m_lara->getPosition().Y, 1.0f))
             {
                 m_flags2_02_toggledOn = false;
                 m_flags2_04_ready = false;
@@ -469,11 +470,11 @@ namespace engine
 
     void ItemController_Block::onInteract(LaraController& lara)
     {
-        if(!getLevel().m_inputHandler->getInputState().action || (m_flags2_02_toggledOn && !m_flags2_04_ready) || isFalling() || !irr::core::equals(lara.getPosition().Y, getPosition().Y, 1.0f))
+        if(!getLevel().m_inputHandler->getInputState().action || (m_flags2_02_toggledOn && !m_flags2_04_ready) || isFalling() || !osg::equivalent(lara.getPosition().Y, getPosition().Y, 1.0f))
             return;
 
         static const InteractionLimits limits{
-            irr::core::aabbox3di{ { -300, 0, -692 },{ 200, 0, -512 } },
+            osg::BoundingBoxImpl<osg::Vec3i>{ { -300, 0, -692 },{ 200, 0, -512 } },
             { -10_deg,-30_deg,-10_deg },
             { +10_deg,+30_deg,+10_deg }
         };
@@ -496,28 +497,28 @@ namespace engine
                 case core::Axis::PosZ:
                 {
                     auto pos = lara.getPosition();
-                    pos.Z = std::floor(pos.Z / loader::SectorSize)*loader::SectorSize + 924;
+                    pos.Z = std::floor(pos.Z / core::SectorSize)*core::SectorSize + 924;
                     lara.setPosition(pos);
                     break;
                 }
                 case core::Axis::PosX:
                 {
                     auto pos = lara.getPosition();
-                    pos.X = std::floor(pos.X / loader::SectorSize)*loader::SectorSize + 924;
+                    pos.X = std::floor(pos.X / core::SectorSize)*core::SectorSize + 924;
                     lara.setPosition(pos);
                     break;
                 }
                 case core::Axis::NegZ:
                 {
                     auto pos = lara.getPosition();
-                    pos.Z = std::floor(pos.Z / loader::SectorSize)*loader::SectorSize + 100;
+                    pos.Z = std::floor(pos.Z / core::SectorSize)*core::SectorSize + 100;
                     lara.setPosition(pos);
                     break;
                 }
                 case core::Axis::NegX:
                 {
                     auto pos = lara.getPosition();
-                    pos.X = std::floor(pos.X / loader::SectorSize)*loader::SectorSize + 100;
+                    pos.X = std::floor(pos.X / core::SectorSize)*core::SectorSize + 100;
                     lara.setPosition(pos);
                     break;
                 }
@@ -538,7 +539,7 @@ namespace engine
 
         if(getLevel().m_inputHandler->getInputState().zMovement == AxisMovement::Forward)
         {
-            if(!canPushBlock(loader::SectorSize, *axis))
+            if(!canPushBlock(core::SectorSize, *axis))
                 return;
 
             setTargetState(2);
@@ -546,7 +547,7 @@ namespace engine
         }
         else if(getLevel().m_inputHandler->getInputState().zMovement == AxisMovement::Backward)
         {
-            if(!canPullBlock(loader::SectorSize, *axis))
+            if(!canPullBlock(core::SectorSize, *axis))
                 return;
 
             setTargetState(3);
@@ -558,7 +559,7 @@ namespace engine
         }
 
         activate();
-        loader::Room::patchHeightsForBlock(*this, loader::SectorSize);
+        loader::Room::patchHeightsForBlock(*this, core::SectorSize);
         m_flags2_02_toggledOn = true;
         m_flags2_04_ready = false;
         ItemController::processAnimCommands();
@@ -569,7 +570,7 @@ namespace engine
     {
         if((m_itemFlags & Oneshot) != 0)
         {
-            loader::Room::patchHeightsForBlock(*this, loader::SectorSize);
+            loader::Room::patchHeightsForBlock(*this, core::SectorSize);
             m_isActive = false;
             m_itemFlags |= Locked;
             return;
@@ -603,7 +604,7 @@ namespace engine
         m_flags2_02_toggledOn = false;
         m_flags2_04_ready = false;
         deactivate();
-        loader::Room::patchHeightsForBlock(*this, -loader::SectorSize);
+        loader::Room::patchHeightsForBlock(*this, -core::SectorSize);
         pos = getRoomBoundPosition();
         sector = getLevel().findFloorSectorWithClampedPosition(pos);
         HeightInfo hi = HeightInfo::fromFloor(sector, pos.position.toInexact(), getLevel().m_cameraController);
@@ -613,7 +614,7 @@ namespace engine
     bool ItemController_Block::isOnFloor(int height) const
     {
         auto sector = getLevel().findFloorSectorWithClampedPosition(getPosition().toInexact(), getCurrentRoom());
-        return sector->floorHeight == -127 || irr::core::equals(gsl::narrow_cast<float>(sector->floorHeight*loader::QuarterSectorSize), getPosition().Y - height, 1.0f);
+        return sector->floorHeight == -127 || osg::equivalent(gsl::narrow_cast<float>(sector->floorHeight*core::QuarterSectorSize), getPosition().Y - height, 1.0f);
     }
 
     bool ItemController_Block::canPushBlock(int height, core::Axis axis) const
@@ -624,10 +625,10 @@ namespace engine
         auto pos = getPosition();
         switch(axis)
         {
-            case core::Axis::PosZ: pos.Z += loader::SectorSize; break;
-            case core::Axis::PosX: pos.X += loader::SectorSize; break;
-            case core::Axis::NegZ: pos.Z -= loader::SectorSize; break;
-            case core::Axis::NegX: pos.X -= loader::SectorSize; break;
+            case core::Axis::PosZ: pos.Z += core::SectorSize; break;
+            case core::Axis::PosX: pos.X += core::SectorSize; break;
+            case core::Axis::NegZ: pos.Z -= core::SectorSize; break;
+            case core::Axis::NegX: pos.X -= core::SectorSize; break;
             default: break;
         }
 
@@ -638,11 +639,11 @@ namespace engine
             return false;
 
         auto targetSector = getLevel().findFloorSectorWithClampedPosition(pos.toInexact(), getCurrentRoom());
-        if(!irr::core::equals(gsl::narrow_cast<float>(targetSector->floorHeight*loader::QuarterSectorSize), pos.Y, 1.0f))
+        if(!osg::equivalent(gsl::narrow_cast<float>(targetSector->floorHeight*core::QuarterSectorSize), pos.Y, 1.0f))
             return false;
 
         pos.Y -= height;
-        return pos.Y >= getLevel().findFloorSectorWithClampedPosition(pos.toInexact(), getCurrentRoom())->ceilingHeight * loader::QuarterSectorSize;
+        return pos.Y >= getLevel().findFloorSectorWithClampedPosition(pos.toInexact(), getCurrentRoom())->ceilingHeight * core::QuarterSectorSize;
     }
 
     bool ItemController_Block::canPullBlock(int height, core::Axis axis) const
@@ -653,10 +654,10 @@ namespace engine
         auto pos = getPosition();
         switch(axis)
         {
-            case core::Axis::PosZ: pos.Z -= loader::SectorSize; break;
-            case core::Axis::PosX: pos.X -= loader::SectorSize; break;
-            case core::Axis::NegZ: pos.Z += loader::SectorSize; break;
-            case core::Axis::NegX: pos.X += loader::SectorSize; break;
+            case core::Axis::PosZ: pos.Z -= core::SectorSize; break;
+            case core::Axis::PosX: pos.X -= core::SectorSize; break;
+            case core::Axis::NegZ: pos.Z += core::SectorSize; break;
+            case core::Axis::NegX: pos.X += core::SectorSize; break;
             default: break;
         }
 
@@ -669,51 +670,51 @@ namespace engine
         if(tmp.checkStaticMeshCollisions(pos, 1000, getLevel()))
             return false;
 
-        if(!irr::core::equals(gsl::narrow_cast<float>(sector->floorHeight*loader::QuarterSectorSize), pos.Y, 1.0f))
+        if(!osg::equivalent(gsl::narrow_cast<float>(sector->floorHeight*core::QuarterSectorSize), pos.Y, 1.0f))
             return false;
 
         auto topPos = pos;
         topPos.Y -= height;
         auto topSector = getLevel().findFloorSectorWithClampedPosition(topPos.toInexact(), getCurrentRoom());
-        if(topPos.Y < topSector->ceilingHeight * loader::QuarterSectorSize)
+        if(topPos.Y < topSector->ceilingHeight * core::QuarterSectorSize)
             return false;
 
         auto laraPos = pos;
         switch(axis)
         {
-            case core::Axis::PosZ: laraPos.Z -= loader::SectorSize; break;
-            case core::Axis::PosX: laraPos.X -= loader::SectorSize; break;
-            case core::Axis::NegZ: laraPos.Z += loader::SectorSize; break;
-            case core::Axis::NegX: laraPos.X += loader::SectorSize; break;
+            case core::Axis::PosZ: laraPos.Z -= core::SectorSize; break;
+            case core::Axis::PosX: laraPos.X -= core::SectorSize; break;
+            case core::Axis::NegZ: laraPos.Z += core::SectorSize; break;
+            case core::Axis::NegX: laraPos.X += core::SectorSize; break;
             default: break;
         }
 
         sector = getLevel().findFloorSectorWithClampedPosition(laraPos.toInexact(), &room);
-        if(!irr::core::equals(gsl::narrow_cast<float>(sector->floorHeight*loader::QuarterSectorSize), pos.Y, 1.0f))
+        if(!osg::equivalent(gsl::narrow_cast<float>(sector->floorHeight*core::QuarterSectorSize), pos.Y, 1.0f))
             return false;
 
         laraPos.Y -= core::ScalpHeight;
         sector = getLevel().findFloorSectorWithClampedPosition(laraPos.toInexact(), &room);
-        if(laraPos.Y < sector->ceilingHeight * loader::QuarterSectorSize)
+        if(laraPos.Y < sector->ceilingHeight * core::QuarterSectorSize)
             return false;
 
         laraPos = getLevel().m_lara->getPosition();
         switch(axis)
         {
             case core::Axis::PosZ:
-                laraPos.Z -= loader::SectorSize;
+                laraPos.Z -= core::SectorSize;
                 tmp.orientationAxis = core::Axis::NegZ;
                 break;
             case core::Axis::PosX:
-                laraPos.X -= loader::SectorSize;
+                laraPos.X -= core::SectorSize;
                 tmp.orientationAxis = core::Axis::NegX;
                 break;
             case core::Axis::NegZ:
-                laraPos.Z += loader::SectorSize;
+                laraPos.Z += core::SectorSize;
                 tmp.orientationAxis = core::Axis::PosZ;
                 break;
             case core::Axis::NegX:
-                laraPos.X += loader::SectorSize;
+                laraPos.X += core::SectorSize;
                 tmp.orientationAxis = core::Axis::PosX;
                 break;
             default: break;
@@ -735,10 +736,10 @@ namespace engine
 
         m_flags2_02_toggledOn = true;
         m_flags2_04_ready = false;
-        loader::Room::patchHeightsForBlock(*this, -2 * loader::SectorSize);
+        loader::Room::patchHeightsForBlock(*this, -2 * core::SectorSize);
         auto pos = getPosition();
-        pos.X = std::floor(pos.X / loader::SectorSize) * loader::SectorSize + loader::SectorSize / 2;
-        pos.Z = std::floor(pos.Z / loader::SectorSize) * loader::SectorSize + loader::SectorSize / 2;
+        pos.X = std::floor(pos.X / core::SectorSize) * core::SectorSize + core::SectorSize / 2;
+        pos.Z = std::floor(pos.Z / core::SectorSize) * core::SectorSize + core::SectorSize / 2;
         setPosition(pos);
     }
     void ItemController_41_TrapDoorUp::processAnimCommands(bool advanceFrame)

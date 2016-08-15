@@ -21,7 +21,7 @@ namespace engine
         return static_cast<LaraStateId>(ItemController::getTargetState());
     }
 
-    void LaraController::playAnimation(loader::AnimationId anim, const boost::optional<irr::u32>& firstFrame)
+    void LaraController::playAnimation(loader::AnimationId anim, const boost::optional<uint32_t>& firstFrame)
     {
         ItemController::playAnimation(static_cast<uint16_t>(anim), firstFrame);
     }
@@ -129,7 +129,7 @@ namespace engine
         collisionInfo.collisionRadius = 300; //!< @todo MAGICK 300
         collisionInfo.frobbelFlags &= ~(CollisionInfo::FrobbelFlag10 | CollisionInfo::FrobbelFlag08 | CollisionInfo::FrobbelFlag_UnwalkableDeadlyFloor | CollisionInfo::FrobbelFlag_UnwalkableSteepFloor | CollisionInfo::FrobbelFlag_UnpassableSteepUpslant);
         collisionInfo.neededCeilingDistance = 400;
-        collisionInfo.neededFloorDistanceBottom = loader::HeightLimit;
+        collisionInfo.neededFloorDistanceBottom = core::HeightLimit;
         collisionInfo.neededFloorDistanceTop = -400;
 
         std::unique_ptr<AbstractStateHandler> nextHandler = nullptr;
@@ -160,8 +160,8 @@ namespace engine
             if( getRotation().Z <= 0_deg )
                 setZRotation(0_deg);
         }
-        setXRotation(irr::core::clamp(getRotation().X, -100_deg, +100_deg));
-        setZRotation(irr::core::clamp(getRotation().Z, -22_deg, +22_deg));
+        setXRotation(osg::clampTo(getRotation().X, -100_deg, +100_deg));
+        setZRotation(osg::clampTo(getRotation().Z, -22_deg, +22_deg));
         {
             auto pos = getPosition();
             pos.X += getRotation().Y.sin() * getRotation().X.cos() * getFallSpeed().getScaled(getCurrentDeltaTime()) / 4;
@@ -208,7 +208,7 @@ namespace engine
         collisionInfo.collisionRadius = 100; //!< @todo MAGICK 100
         collisionInfo.frobbelFlags &= ~(CollisionInfo::FrobbelFlag10 | CollisionInfo::FrobbelFlag08 | CollisionInfo::FrobbelFlag_UnwalkableDeadlyFloor | CollisionInfo::FrobbelFlag_UnwalkableSteepFloor | CollisionInfo::FrobbelFlag_UnpassableSteepUpslant);
         collisionInfo.neededCeilingDistance = 100;
-        collisionInfo.neededFloorDistanceBottom = loader::HeightLimit;
+        collisionInfo.neededFloorDistanceBottom = core::HeightLimit;
         collisionInfo.neededFloorDistanceTop = -100;
 
         setCameraRotationX(-22_deg);
@@ -374,7 +374,7 @@ namespace engine
             getLevel().m_cameraController->resetHeadTorsoRotation();
             m_handStatus = 0;
 
-            if( !waterSurfaceHeight || std::abs(*waterSurfaceHeight - getPosition().Y) >= loader::QuarterSectorSize )
+            if( !waterSurfaceHeight || std::abs(*waterSurfaceHeight - getPosition().Y) >= core::QuarterSectorSize )
             {
                 m_underwaterState = UnderwaterState::OnLand;
                 playAnimation(loader::AnimationId::FREE_FALL_FORWARD, 492);
@@ -578,7 +578,7 @@ namespace engine
         {
             if( !isDoppelganger )
             {
-                if( irr::core::equals(std::lround(getPosition().Y), getFloorHeight(), 1L) )
+                if( osg::equivalent(std::round(getPosition().Y), getFloorHeight(), 1) )
                 {
                     //! @todo kill Lara
                 }
@@ -606,7 +606,7 @@ namespace engine
                 break;
             case loader::TriggerType::Pad:
             case loader::TriggerType::AntiPad:
-                runActions = irr::core::equals(std::lround(getPosition().Y), getFloorHeight(), 1L);
+                runActions = osg::equivalent(std::round(getPosition().Y), getFloorHeight(), 1);
                 break;
             case loader::TriggerType::Switch:
                 {
@@ -800,7 +800,7 @@ namespace engine
                 sector = room.getSectorByAbsolutePosition(getPosition().toInexact());
             }
 
-            return sector->ceilingHeight * loader::QuarterSectorSize;
+            return sector->ceilingHeight * core::QuarterSectorSize;
         }
 
         while( true )
@@ -812,13 +812,13 @@ namespace engine
             const auto& room = getLevel().m_rooms[sector->roomBelow];
             if( room.isWaterRoom() )
             {
-                return sector->floorHeight * loader::QuarterSectorSize;
+                return sector->floorHeight * core::QuarterSectorSize;
             }
 
             sector = room.getSectorByAbsolutePosition(getPosition().toInexact());
         }
 
-        return sector->ceilingHeight * loader::QuarterSectorSize;
+        return sector->ceilingHeight * core::QuarterSectorSize;
     }
 
     void LaraController::setCameraRotation(core::Angle x, core::Angle y)

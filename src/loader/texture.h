@@ -2,13 +2,18 @@
 
 #include "io/sdlreader.h"
 
-#include <irrlicht.h>
+#include <osg/Vec4>
+#include <osg/Material>
+#include <osg/Texture2D>
+#include <osg/BlendEquation>
+
 
 namespace loader
 {
     struct ByteTexture
     {
         uint8_t pixels[256][256];
+
 
         static std::unique_ptr<ByteTexture> read(io::SDLReader& reader)
         {
@@ -17,6 +22,7 @@ namespace loader
             return textile;
         }
     };
+
 
     /** \brief 16-bit texture.
     *
@@ -29,6 +35,7 @@ namespace loader
     struct WordTexture
     {
         uint16_t pixels[256][256];
+
 
         static std::unique_ptr<WordTexture> read(io::SDLReader& reader)
         {
@@ -44,9 +51,11 @@ namespace loader
         }
     };
 
+
     struct DWordTexture final
     {
-        irr::video::SColor pixels[256][256];
+        osg::Vec4 pixels[256][256];
+
 
         static std::unique_ptr<DWordTexture> read(io::SDLReader& reader)
         {
@@ -56,16 +65,22 @@ namespace loader
             {
                 for( int j = 0; j < 256; j++ )
                 {
-                    auto tmp = reader.readU32(); // format is ARGB
-                    textile->pixels[i][j].set(tmp);
+                    const auto tmp = reader.readU32(); // format is ARGB
+                    const auto a = ((tmp >> 24) & 0xff) / 255.0f;
+                    const auto r = ((tmp >> 16) & 0xff) / 255.0f;
+                    const auto g = ((tmp >> 8) & 0xff) / 255.0f;
+                    const auto b = ((tmp >> 0) & 0xff) / 255.0f;
+                    textile->pixels[i][j].set(r, g, b, a);
                 }
             }
 
             return textile;
         }
 
-        irr::video::ITexture* toTexture(irr::scene::ISceneManager* mgr, int texIdx);
+
+        osg::ref_ptr<osg::Texture2D> toTexture();
     };
+
 
     enum class BlendingMode : uint16_t
     {
@@ -83,6 +98,7 @@ namespace loader
         AnimatedTexture
     };
 
+
     /** \brief Object Texture Vertex.
     *
     * It specifies a vertex location in textile coordinates.
@@ -98,6 +114,7 @@ namespace loader
         int8_t ycoordinate; // 1 if Ypixel is the low value, -1 if Ypixel is the high value in the object texture
         uint8_t ypixel;
 
+
         /// \brief reads object texture vertex definition.
         static UVCoordinates readTr1(io::SDLReader& reader)
         {
@@ -108,6 +125,7 @@ namespace loader
             vert.ypixel = reader.readU8();
             return vert;
         }
+
 
         static UVCoordinates readTr4(io::SDLReader& reader)
         {
@@ -123,6 +141,7 @@ namespace loader
             return vert;
         }
     };
+
 
     struct TextureLayoutProxy
     {
@@ -143,6 +162,7 @@ namespace loader
 
             int colorId = -1;
 
+
             inline bool operator==(const TextureKey& rhs) const
             {
                 return tileAndFlag == rhs.tileAndFlag
@@ -150,6 +170,7 @@ namespace loader
                     && blendingMode == rhs.blendingMode
                     && colorId == rhs.colorId;
             }
+
 
             inline bool operator<(const TextureKey& rhs) const
             {
@@ -165,6 +186,7 @@ namespace loader
                 return colorId < rhs.colorId;
             }
         };
+
 
         TextureKey textureKey;
         UVCoordinates uvCoordinates[4]; // the four corners of the texture
@@ -203,6 +225,7 @@ namespace loader
             return proxy;
         }
 
+
         static std::unique_ptr<TextureLayoutProxy> readTr4(io::SDLReader& reader)
         {
             std::unique_ptr<TextureLayoutProxy> proxy{new TextureLayoutProxy()};
@@ -223,6 +246,7 @@ namespace loader
             return proxy;
         }
 
+
         static std::unique_ptr<TextureLayoutProxy> readTr5(io::SDLReader& reader)
         {
             std::unique_ptr<TextureLayoutProxy> proxy = readTr4(reader);
@@ -233,55 +257,66 @@ namespace loader
             return proxy;
         }
 
-        static irr::video::SMaterial createMaterial(irr::video::ITexture* texture, BlendingMode bmode)
+        using MaterialMap = std::map<TextureKey, osg::ref_ptr<osg::StateSet>>;
+
+        static osg::ref_ptr<osg::StateSet> createMaterial(const osg::ref_ptr<osg::Texture2D>& texture, BlendingMode bmode)
         {
-            irr::video::SMaterial result;
-            // Set some defaults
-            result.setTexture(0, texture);
-            //result.BackfaceCulling = false;
-            result.ColorMaterial = irr::video::ECM_DIFFUSE;
-            result.Lighting = true;
-            result.AmbientColor.set(0);
-            result.TextureLayer[0].TextureWrapU = irr::video::ETC_CLAMP;
-            result.TextureLayer[0].TextureWrapV = irr::video::ETC_CLAMP;
+            osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
+            stateSet->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
+            stateSet->setMode(GL_LIGHTING, osg::StateAttribute::ON);
+
+            osg::ref_ptr<osg::Material> material = new osg::Material();
+            material->setColorMode(osg::Material::AMBIENT_AND_DIFFUSE);
+            material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4());
+            material->setShininess(osg::Material::Face::FRONT_AND_BACK, 20);
 
             switch( bmode )
             {
-            case BlendingMode::Solid:
-                //result.BlendOperation = irr::video::EBO_ADD;
-                break;
+                case BlendingMode::Solid:
+                    stateSet->setMode(GL_BLEND, osg::StateAttribute::OFF);
+                    stateSet->setRenderingHint(osg::StateSet::OPAQUE_BIN);
+                    break;
 
-            case BlendingMode::AlphaTransparency:
-                result.MaterialType = irr::video::EMT_TRANSPARENT_ALPHA_CHANNEL;
-                result.BlendOperation = irr::video::EBO_ADD;
-                break;
+                case BlendingMode::AlphaTransparency:
+                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
+                    break;
 
-            case BlendingMode::VertexColorTransparency: // Classic PC alpha
-                result.MaterialType = irr::video::EMT_TRANSPARENT_VERTEX_ALPHA;
-                result.BlendOperation = irr::video::EBO_ADD;
-                break;
+                case BlendingMode::VertexColorTransparency: // Classic PC alpha
+                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
+                    //! @fixme Use vertex alpha as source
+                    break;
 
-            case BlendingMode::InvertSrc: // Inversion by src (PS darkness) - SAME AS IN TR3-TR5
-                result.BlendOperation = irr::video::EBO_SUBTRACT;
-                break;
+                case BlendingMode::InvertSrc: // Inversion by src (PS darkness) - SAME AS IN TR3-TR5
+                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
+                    break;
 
-            case BlendingMode::InvertDst: // Inversion by dest
-                result.BlendOperation = irr::video::EBO_REVSUBTRACT;
-                break;
+                case BlendingMode::InvertDst: // Inversion by dest
+                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_REVERSE_SUBTRACT));
+                    break;
 
-            case BlendingMode::Screen: // Screen (smoke, etc.)
-                result.BlendOperation = irr::video::EBO_SUBTRACT;
-                result.MaterialType = irr::video::EMT_TRANSPARENT_ADD_COLOR;
-                break;
+                case BlendingMode::Screen: // Screen (smoke, etc.)
+                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
+                    break;
 
-            case BlendingMode::AnimatedTexture:
-                break;
+                case BlendingMode::AnimatedTexture:
+                    break;
 
-            default: // opaque animated textures case
-                BOOST_ASSERT(false); // FIXME [irrlicht]
+                default: // opaque animated textures case
+                    BOOST_ASSERT(false); // FIXME [irrlicht]
             }
 
-            return result;
+            stateSet->setAttribute(material, osg::StateAttribute::ON);
+            return stateSet;
         }
     };
 }

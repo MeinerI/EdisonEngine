@@ -6,6 +6,7 @@
 #include "util.h"
 
 #include <map>
+#include <osg/BoundingBox>
 
 namespace core
 {
@@ -87,7 +88,7 @@ namespace loader
             return mesh;
         }
 
-        irr::scene::SMesh* createMesh(irr::scene::ISceneManager* mgr, int dumpIdx, const std::vector<TextureLayoutProxy>& textureProxies, const std::map<TextureLayoutProxy::TextureKey, irr::video::SMaterial>& materials, const std::vector<irr::video::SMaterial>& colorMaterials, render::TextureAnimator& animator) const;
+        osg::ref_ptr<osg::Geometry> createMesh(const std::vector<TextureLayoutProxy>& textureProxies, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::StateSet>>& colorMaterials, render::TextureAnimator& animator) const;
     };
 
     struct RoomStaticMesh
@@ -184,8 +185,8 @@ namespace loader
     {
         uint32_t id; // Object Identifier (matched in Items[])
         uint16_t mesh; // mesh (offset into MeshPointers[])
-        irr::core::aabbox3di visibility_box;
-        irr::core::aabbox3di collision_box;
+        osg::BoundingBoxImpl<osg::Vec3i> visibility_box;
+        osg::BoundingBoxImpl<osg::Vec3i> collision_box;
         uint16_t flags; // Meaning uncertain; it is usually 2, and is 3 for objects Lara can travel through,
         // like TR2's skeletons and underwater vegetation
 
@@ -194,7 +195,7 @@ namespace loader
             return (flags & 1) != 0;
         }
 
-        irr::core::aabbox3di getCollisionBox(const core::TRCoordinates& pos, core::Angle angle) const;
+        osg::BoundingBoxImpl<osg::Vec3i> getCollisionBox(const core::TRCoordinates& pos, core::Angle angle) const;
 
         static std::unique_ptr<StaticMesh> read(io::SDLReader& reader)
         {
@@ -202,19 +203,19 @@ namespace loader
             mesh->id = reader.readU32();
             mesh->mesh = reader.readU16();
 
-            mesh->visibility_box.MinEdge.X = reader.readI16();
-            mesh->visibility_box.MaxEdge.X = reader.readI16();
-            mesh->visibility_box.MinEdge.Y = reader.readI16();
-            mesh->visibility_box.MaxEdge.Y = reader.readI16();
-            mesh->visibility_box.MinEdge.Z = reader.readI16();
-            mesh->visibility_box.MaxEdge.Z = reader.readI16();
+            mesh->visibility_box.xMin() = reader.readI16();
+            mesh->visibility_box.xMax() = reader.readI16();
+            mesh->visibility_box.yMin() = reader.readI16();
+            mesh->visibility_box.yMax() = reader.readI16();
+            mesh->visibility_box.zMin() = reader.readI16();
+            mesh->visibility_box.zMax() = reader.readI16();
 
-            mesh->collision_box.MinEdge.X = reader.readI16();
-            mesh->collision_box.MaxEdge.X = reader.readI16();
-            mesh->collision_box.MinEdge.Y = reader.readI16();
-            mesh->collision_box.MaxEdge.Y = reader.readI16();
-            mesh->collision_box.MinEdge.Z = reader.readI16();
-            mesh->collision_box.MaxEdge.Z = reader.readI16();
+            mesh->collision_box.xMin() = reader.readI16();
+            mesh->collision_box.xMax() = reader.readI16();
+            mesh->collision_box.yMin() = reader.readI16();
+            mesh->collision_box.yMax() = reader.readI16();
+            mesh->collision_box.zMin() = reader.readI16();
+            mesh->collision_box.zMax() = reader.readI16();
 
             mesh->flags = reader.readU16();
             return mesh;

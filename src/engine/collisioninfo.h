@@ -53,16 +53,16 @@ namespace engine
 
         static float reflectAtSectorBoundary(float target, float current)
         {
-            const auto targetSector = gsl::narrow_cast<int>(std::floor(target / loader::SectorSize));
-            const auto currentSector = gsl::narrow_cast<int>(std::floor(current / loader::SectorSize));
+            const auto targetSector = gsl::narrow_cast<int>(std::floor(target / core::SectorSize));
+            const auto currentSector = gsl::narrow_cast<int>(std::floor(current / core::SectorSize));
             if( targetSector == currentSector )
                 return 0;
 
-            const auto targetInSector = gsl::narrow_cast<float>(std::fmod(target, loader::SectorSize));
+            const auto targetInSector = gsl::narrow_cast<float>(std::fmod(target, core::SectorSize));
             if( current <= target )
                 return -targetInSector;
             else
-                return loader::SectorSize - 1 - targetInSector;
+                return core::SectorSize - 1 - targetInSector;
         }
 
         void initHeightInfo(const core::ExactTRCoordinates& laraPos, const level::Level& level, int height);

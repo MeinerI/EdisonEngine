@@ -2,7 +2,8 @@
 
 #include "io/sdlreader.h"
 
-#include <irrlicht.h>
+#include <osg/Vec4>
+
 #include <gsl.h>
 
 namespace loader
@@ -27,9 +28,9 @@ namespace loader
             return read(reader, true);
         }
 
-        irr::video::SColor toSColor() const
+        osg::Vec4 toSColor() const
         {
-            return irr::video::SColor(a, r, g, b);
+            return osg::Vec4(r / 255.0f, g / 255.0f, b / 255.0f, a / 255.0f);
         }
 
     private:
@@ -55,14 +56,15 @@ namespace loader
     {
         float r, g, b, a;
 
-        irr::video::SColor toSColor(irr::f32 intensity) const
+        osg::Vec4 toSColor(float intensity) const
         {
             BOOST_ASSERT(intensity >= 0 && intensity <= 1);
-            irr::video::SColor col;
-            col.setRed(gsl::narrow<irr::u8>(std::lround(r * intensity * 255)));
-            col.setGreen(gsl::narrow<irr::u8>(std::lround(g * intensity * 255)));
-            col.setBlue(gsl::narrow<irr::u8>(std::lround(b * intensity * 255)));
-            col.setAlpha(gsl::narrow<irr::u8>(std::lround(a * intensity * 255)));
+            osg::Vec4 col(
+                a * intensity,
+                r * intensity,
+                g * intensity,
+                b * intensity
+            );
             return col;
         }
     };

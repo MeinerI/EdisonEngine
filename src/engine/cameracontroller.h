@@ -5,19 +5,20 @@
 #include "loader/floordata.h"
 #include "audio/sourcehandle.h"
 
+#include <osg/Camera>
+#include <osg/PositionAttitudeTransform>
+
 namespace engine
 {
     class ItemController;
     class LaraController;
 
-    class CameraController final : public irr::scene::ISceneNodeAnimator
+    class CameraController final : public osg::Callback
     {
     private:
         // Internals
-        bool m_firstUpdate = true;
-        irr::u32 m_lastAnimationTime = 0;
-        bool m_firstInput = true;
-        gsl::not_null<irr::scene::ICameraSceneNode*> m_camera;
+        gsl::not_null<osg::ref_ptr<osg::PositionAttitudeTransform>> m_cameraPosition{ new osg::PositionAttitudeTransform() };
+        gsl::not_null<osg::ref_ptr<osg::Camera>> m_camera;
 
         // For interactions
         level::Level* m_level;
@@ -47,30 +48,12 @@ namespace engine
         core::TRRotation m_headRotation;
         core::TRRotation m_torsoRotation;
 
-        irr::video::IVideoDriver* m_driver;
-
         std::shared_ptr<audio::SourceHandle> m_underwaterAmbience;
 
     public:
-        explicit CameraController(gsl::not_null<level::Level*> level, gsl::not_null<LaraController*> laraController, gsl::not_null<irr::video::IVideoDriver*> drv, const gsl::not_null<irr::scene::ICameraSceneNode*>& camera);
+        explicit CameraController(gsl::not_null<level::Level*> level, gsl::not_null<LaraController*> laraController, const gsl::not_null<osg::ref_ptr<osg::Camera>>& camera);
 
-        //! Animates a scene node.
-        /** \param node Node to animate.
-        \param timeMs Current time in milli seconds. */
-        void animateNode(irr::scene::ISceneNode* node, irr::u32 timeMs) override;
-
-        //! Creates a clone of this animator.
-        /** Please note that you will have to drop
-        (IReferenceCounted::drop()) the returned pointer after calling this. */
-        irr::scene::ISceneNodeAnimator* createClone(irr::scene::ISceneNode* /*node*/, irr::scene::ISceneManager* /*newManager*/ = nullptr) override;
-
-        //! Returns true if this animator receives events.
-        /** When attached to an active camera, this animator will be
-        able to respond to events such as mouse and keyboard events. */
-        bool isEventReceiverEnabled() const override
-        {
-            return true;
-        }
+        bool run(osg::Object* object, osg::Object* data) override;
 
         const level::Level* getLevel() const noexcept
         {
@@ -140,19 +123,19 @@ namespace engine
             return m_torsoRotation;
         }
 
-        irr::core::vector3df getPosition() const
+        osg::Vec3 getPosition() const
         {
-            return m_camera->getAbsolutePosition();
+            return m_cameraPosition->getPosition();
         }
 
-        irr::core::vector3df getFrontVector() const
+        osg::Vec3 getFrontVector() const
         {
-            return m_camera->getTarget() - m_camera->getAbsolutePosition();
+            return m_cameraPosition->getAttitude() * osg::Z_AXIS;
         }
 
-        irr::core::vector3df getUpVector() const
+        osg::Vec3 getUpVector() const
         {
-            return m_camera->getUpVector();
+            return m_cameraPosition->getAttitude() * osg::Y_AXIS;
         }
 
         void resetHeadTorsoRotation()

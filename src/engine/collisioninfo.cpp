@@ -2,7 +2,6 @@
 
 #include "core/magic.h"
 #include "level/level.h"
-#include "util/vmath.h"
 #include "laracontroller.h"
 
 namespace engine
@@ -75,7 +74,7 @@ namespace engine
                 || ((frobbelFlags & FrobbelFlag_UnwalkableDeadlyFloor) != 0 && front.floor.lastTriggerOrKill != nullptr && loader::extractFDFunction(*front.floor.lastTriggerOrKill) == loader::FDFunction::Death)
             ) )
         {
-            front.floor.distance = 2 * loader::QuarterSectorSize;
+            front.floor.distance = 2 * core::QuarterSectorSize;
         }
 
         // Front left
@@ -93,7 +92,7 @@ namespace engine
                 || ((frobbelFlags & FrobbelFlag_UnwalkableDeadlyFloor) != 0 && frontLeft.floor.lastTriggerOrKill != nullptr && loader::extractFDFunction(*frontLeft.floor.lastTriggerOrKill) == loader::FDFunction::Death)
             ) )
         {
-            frontLeft.floor.distance = 2 * loader::QuarterSectorSize;
+            frontLeft.floor.distance = 2 * core::QuarterSectorSize;
         }
 
         // Front right
@@ -111,12 +110,12 @@ namespace engine
                 || ((frobbelFlags & FrobbelFlag_UnwalkableDeadlyFloor) != 0 && frontRight.floor.lastTriggerOrKill != nullptr && loader::extractFDFunction(*frontRight.floor.lastTriggerOrKill) == loader::FDFunction::Death)
             ) )
         {
-            frontRight.floor.distance = 2 * loader::QuarterSectorSize;
+            frontRight.floor.distance = 2 * core::QuarterSectorSize;
         }
 
         checkStaticMeshCollisions(laraPos, height, level);
 
-        if( current.floor.distance == -loader::HeightLimit )
+        if( current.floor.distance == -core::HeightLimit )
         {
             collisionFeedback = position - laraPos;
             axisCollisions = AxisColl_FrontForwardBlocked;
@@ -213,13 +212,14 @@ namespace engine
 
     bool CollisionInfo::checkStaticMeshCollisions(const core::ExactTRCoordinates& position, int height, const level::Level& level)
     {
+        Expects(height >= 0);
+
         auto rooms = collectNeighborRooms(position, collisionRadius + 50, height + 50, level);
 
-        irr::core::aabbox3di baseCollisionBox(
+        osg::BoundingBoxImpl<osg::Vec3i> baseCollisionBox(
                                               position.X - collisionRadius, position.Y - height, position.Z - collisionRadius,
                                               position.X + collisionRadius, position.Y         , position.Z + collisionRadius
                                              );
-        baseCollisionBox.repair();
 
         hasStaticMeshCollision = false;
 
@@ -231,17 +231,17 @@ namespace engine
                 if( sm->doNotCollide() )
                     continue;
 
-                irr::core::aabbox3di meshCollisionBox = sm->getCollisionBox(rsm.position, core::Angle{rsm.rotation});
+                osg::BoundingBoxImpl<osg::Vec3i> meshCollisionBox = sm->getCollisionBox(rsm.position, core::Angle{rsm.rotation});
 
-                if( !meshCollisionBox.intersectsWithBox(baseCollisionBox) )
+                if( !meshCollisionBox.intersects(baseCollisionBox) )
                     continue;
 
-                auto dx = meshCollisionBox.MaxEdge.X - baseCollisionBox.MinEdge.X;
-                if( baseCollisionBox.MaxEdge.X - meshCollisionBox.MinEdge.X < dx )
-                    dx = -(baseCollisionBox.MaxEdge.X - meshCollisionBox.MinEdge.X);
-                auto dz = meshCollisionBox.MaxEdge.Z - baseCollisionBox.MinEdge.Z;
-                if( baseCollisionBox.MaxEdge.Z - meshCollisionBox.MinEdge.Z < dz )
-                    dz = -(baseCollisionBox.MaxEdge.Z - meshCollisionBox.MinEdge.Z);
+                auto dx = meshCollisionBox.xMax() - baseCollisionBox.xMin();
+                if( baseCollisionBox.xMax() - meshCollisionBox.xMin() < dx )
+                    dx = -(baseCollisionBox.xMax() - meshCollisionBox.xMin());
+                auto dz = meshCollisionBox.zMax() - baseCollisionBox.zMin();
+                if( baseCollisionBox.zMax() - meshCollisionBox.zMin() < dz )
+                    dz = -(baseCollisionBox.zMax() - meshCollisionBox.zMin());
 
                 switch( orientationAxis )
                 {

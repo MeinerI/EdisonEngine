@@ -20,7 +20,7 @@ namespace engine
             roomSector = room->getSectorByAbsolutePosition(pos);
         }
 
-        hi.distance = roomSector->floorHeight * loader::QuarterSectorSize;
+        hi.distance = roomSector->floorHeight * core::QuarterSectorSize;
         hi.lastTriggerOrKill = nullptr;
 
         if( roomSector->floorDataIndex == 0 )
@@ -49,29 +49,29 @@ namespace engine
                         else
                             hi.slantClass = SlantClass::Steep;
 
-                        const auto localX = pos.X % loader::SectorSize;
-                        const auto localZ = pos.Z % loader::SectorSize;
+                        const auto localX = pos.X % core::SectorSize;
+                        const auto localZ = pos.Z % core::SectorSize;
 
                         if( zSlant > 0 ) // lower edge at -Z
                         {
-                            auto dist = loader::SectorSize - localZ;
-                            hi.distance += dist * zSlant * loader::QuarterSectorSize / loader::SectorSize;
+                            auto dist = core::SectorSize - localZ;
+                            hi.distance += dist * zSlant * core::QuarterSectorSize / core::SectorSize;
                         }
                         else if( zSlant < 0 ) // lower edge at +Z
                         {
                             auto dist = localZ;
-                            hi.distance -= dist * zSlant * loader::QuarterSectorSize / loader::SectorSize;
+                            hi.distance -= dist * zSlant * core::QuarterSectorSize / core::SectorSize;
                         }
 
                         if( xSlant > 0 ) // lower edge at -X
                         {
-                            auto dist = loader::SectorSize - localX;
-                            hi.distance += dist * xSlant * loader::QuarterSectorSize / loader::SectorSize;
+                            auto dist = core::SectorSize - localX;
+                            hi.distance += dist * xSlant * core::QuarterSectorSize / core::SectorSize;
                         }
                         else if( xSlant < 0 ) // lower edge at +X
                         {
                             auto dist = localX;
-                            hi.distance -= dist * xSlant * loader::QuarterSectorSize / loader::SectorSize;
+                            hi.distance -= dist * xSlant * core::QuarterSectorSize / core::SectorSize;
                         }
                     }
                 }
@@ -135,7 +135,7 @@ namespace engine
             roomSector = room->getSectorByAbsolutePosition(pos);
         }
 
-        hi.distance = roomSector->ceilingHeight * loader::QuarterSectorSize;
+        hi.distance = roomSector->ceilingHeight * core::QuarterSectorSize;
 
         if( roomSector->floorDataIndex != 0 )
         {
@@ -159,29 +159,29 @@ namespace engine
                 const auto absZ = std::abs(zSlant);
                 if(!skipSteepSlants || (absX <= 2 && absZ <= 2))
                 {
-                    const auto localX = pos.X % loader::SectorSize;
-                    const auto localZ = pos.Z % loader::SectorSize;
+                    const auto localX = pos.X % core::SectorSize;
+                    const auto localZ = pos.Z % core::SectorSize;
 
                     if(zSlant > 0) // lower edge at -Z
                     {
-                        auto dist = loader::SectorSize - localZ;
-                        hi.distance -= dist * zSlant * loader::QuarterSectorSize / loader::SectorSize;
+                        auto dist = core::SectorSize - localZ;
+                        hi.distance -= dist * zSlant * core::QuarterSectorSize / core::SectorSize;
                     }
                     else if(zSlant < 0) // lower edge at +Z
                     {
                         auto dist = localZ;
-                        hi.distance += dist * zSlant * loader::QuarterSectorSize / loader::SectorSize;
+                        hi.distance += dist * zSlant * core::QuarterSectorSize / core::SectorSize;
                     }
 
                     if(xSlant > 0) // lower edge at -X
                     {
                         auto dist = localX;
-                        hi.distance -= dist * xSlant * loader::QuarterSectorSize / loader::SectorSize;
+                        hi.distance -= dist * xSlant * core::QuarterSectorSize / core::SectorSize;
                     }
                     else if(xSlant < 0) // lower edge at +X
                     {
-                        auto dist = loader::SectorSize - localX;
-                        hi.distance += dist * xSlant * loader::QuarterSectorSize / loader::SectorSize;
+                        auto dist = core::SectorSize - localX;
+                        hi.distance += dist * xSlant * core::QuarterSectorSize / core::SectorSize;
                     }
                 }
             }

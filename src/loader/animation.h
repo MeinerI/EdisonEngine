@@ -2,7 +2,8 @@
 
 #include "io/sdlreader.h"
 
-#include <irrlicht.h>
+#include <osgAnimation/Animation>
+
 #include <gsl.h>
 
 #include <map>
@@ -161,14 +162,14 @@ namespace loader
         struct FrameRange
         {
             //! The first real frame in the linearized animation this range describes
-            const irr::u32 offset;
+            const uint32_t offset;
             //! The first frame of the source animation frame range
-            const irr::u32 firstFrame;
+            const uint32_t firstFrame;
             //! The last frame of the source animation frame range
-            const irr::u32 lastFrame;
-            const std::map<irr::u32, irr::core::aabbox3di> bboxes;
+            const uint32_t lastFrame;
+            const std::map<uint32_t, osg::BoundingBoxImpl<osg::Vec3i>> bboxes;
 
-            FrameRange(irr::u32 o, irr::u32 f, irr::u32 l, std::map<irr::u32, irr::core::aabbox3di>&& bb)
+            FrameRange(uint32_t o, uint32_t f, uint32_t l, std::map<uint32_t, osg::BoundingBoxImpl<osg::Vec3i>>&& bb)
                 : offset(o)
                 , firstFrame(f)
                 , lastFrame(l)
@@ -178,7 +179,7 @@ namespace loader
                 BOOST_ASSERT(!bboxes.empty());
             }
 
-            void apply(irr::scene::IAnimatedMeshSceneNode* node, irr::u32 localFrame) const
+            void apply(osgAnimation::Animation* node, uint32_t localFrame) const
             {
                 BOOST_ASSERT(localFrame >= firstFrame && localFrame <= lastFrame);
 
@@ -187,17 +188,14 @@ namespace loader
                 const auto realLast = offset + lastFrame - firstFrame;
 
                 BOOST_ASSERT(realFirst <= realLast);
-                if( !node->setFrameLoop(realFirst, realLast) )
-                {
-                    BOOST_LOG_TRIVIAL(error) << "  - Failed to set frame loop (" << node->getName() << ") " << realFirst << ".." << realLast;
-                    return;
-                }
+                node->setPlayMode(osgAnimation::Animation::LOOP);
+                node->setStartTime(realFirst);
+                node->setDuration(realLast - realFirst);
                 // BOOST_LOG_TRIVIAL(debug) << "  - Frame loop (" << node->getName() << ") " << realFirst << ".." << realLast << " @ " << realOffset;
-                node->setCurrentFrame(gsl::narrow_cast<irr::f32>(realOffset));
-                node->animateJoints();
+                //node->setCurrentFrame(gsl::narrow_cast<float>(realOffset));
             }
 
-            irr::core::aabbox3di getBoundingBox(irr::u32 localFrame) const
+            osg::BoundingBoxImpl<osg::Vec3i> getBoundingBox(uint32_t localFrame) const
             {
                 BOOST_ASSERT(localFrame >= firstFrame && localFrame <= lastFrame);
                 localFrame -= firstFrame;
@@ -219,17 +217,17 @@ namespace loader
                         return static_cast<int>(a * (1.0f - d) + b * d);
                     };
 
-                auto lerpIVec = [&lerpInt](const irr::core::vector3di& a, const irr::core::vector3di& b, float d) -> irr::core::vector3di
+                auto lerpIVec = [&lerpInt](const osg::Vec3i& a, const osg::Vec3i& b, float d) -> osg::Vec3i
                     {
-                        return irr::core::vector3di{
-                            lerpInt(a.X, b.X, d),
-                            lerpInt(a.Y, b.Y, d),
-                            lerpInt(a.Z, b.Z, d)
+                        return osg::Vec3i{
+                            lerpInt(a.x(), b.x(), d),
+                            lerpInt(a.y(), b.y(), d),
+                            lerpInt(a.z(), b.z(), d)
                         };
                     };
 
                 // aabbox's getInterpolated does wrong rounding for ints, so we need to do it manually
-                irr::core::aabbox3di interp(lerpIVec(before->second.MinEdge, it->second.MinEdge, lambda), lerpIVec(before->second.MaxEdge, it->second.MaxEdge, lambda));
+                osg::BoundingBoxImpl<osg::Vec3i> interp(lerpIVec(before->second._min, it->second._min, lambda), lerpIVec(before->second._max, it->second._max, lambda));
                 return interp;
             }
         };

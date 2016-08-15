@@ -10,19 +10,22 @@
 #include "meshes.h"
 #include "texture.h"
 #include "audio.h"
+#include "render/entity.h"
 
-#include <irrlicht.h>
 #include <gsl.h>
 
 #include <array>
 #include <stdexcept>
 #include <vector>
 #include <map>
-#include <iostream>
 
 #include <boost/log/trivial.hpp>
 #include <boost/throw_exception.hpp>
 #include <boost/optional.hpp>
+
+#include <osg/Light>
+#include <osg/Geode>
+
 
 /**
  * @defgroup native Native data interface
@@ -47,10 +50,6 @@ namespace loader
     constexpr const uint16_t TextureIndexMask = 0x0FFF;
     //constexpr const uint16_t TR_TEXTURE_SHAPE_MASK = 0x7000;          // still not used
     constexpr const uint16_t TextureFlippedMask = 0x8000;
-
-    constexpr int SectorSize = 1024;
-    constexpr int QuarterSectorSize = SectorSize / 4;
-    constexpr int HeightLimit = 127 * QuarterSectorSize;
 
     struct Portal
     {
@@ -164,7 +163,7 @@ namespace loader
 
     struct Light
     {
-        irr::scene::ILightSceneNode* node = nullptr;
+        osg::ref_ptr<osg::Light> node = nullptr;
 
         core::TRCoordinates position; // world coords
         ByteColor color; // three bytes rgb values
@@ -215,7 +214,7 @@ namespace loader
             // only in TR2
             light.intensity2 = light.specularIntensity;
 
-            light.intensity = irr::core::clamp(light.specularIntensity / 4095.0f, 0.0f, 1.0f);
+            light.intensity = light.specularIntensity / 4095.0f;
 
             light.fade2 = light.specularFade;
 
@@ -422,7 +421,7 @@ namespace loader
         int16_t lighting2; // Almost always equal to Lighting1 [absent from TR1 data files]
         // TR5 -->
         core::TRCoordinates normal;
-        irr::video::SColor color;
+        osg::Vec4 color;
 
         /** \brief reads a room vertex definition.
           *
@@ -442,8 +441,8 @@ namespace loader
             room_vertex.attributes = 0;
             // only in TR5
             room_vertex.normal = {0,0,0};
-            auto f = gsl::narrow_cast<irr::u8>(255 - 255 * room_vertex.darkness / 0x1fff);
-            room_vertex.color.set(255, f, f, f);
+            auto f = gsl::narrow_cast<float>(1 - float(room_vertex.darkness) / 0x1fff);
+            room_vertex.color.set(f, f, f, 1.0f);
             return room_vertex;
         }
 
@@ -457,8 +456,8 @@ namespace loader
             room_vertex.lighting2 = (8191 - reader.readI16()) << 2;
             // only in TR5
             room_vertex.normal = {0,0,0};
-            auto f = gsl::narrow<irr::u8>(room_vertex.lighting2 / 32768.0f * 255);
-            room_vertex.color.set(255, f, f, f);
+            auto f = gsl::narrow_cast<float>(1 - float(room_vertex.darkness) / 32767);
+            room_vertex.color.set(f, f, f, 1.0f);
             return room_vertex;
         }
 
@@ -472,10 +471,10 @@ namespace loader
             room_vertex.lighting2 = reader.readI16();
             // only in TR5
             room_vertex.normal = {0,0,0};
-            room_vertex.color.set(255,
-                                  gsl::narrow<irr::u8>(((room_vertex.lighting2 & 0x7C00) >> 10) / 62.0f * 255),
-                                  gsl::narrow<irr::u8>(((room_vertex.lighting2 & 0x03E0) >> 5) / 62.0f * 255),
-                                  gsl::narrow<irr::u8>((room_vertex.lighting2 & 0x001F) / 62.0f * 255));
+            room_vertex.color.set(((room_vertex.lighting2 & 0x7C00) >> 10) / 62.0f,
+                                  ((room_vertex.lighting2 & 0x03E0) >> 5) / 62.0f,
+                                  (room_vertex.lighting2 & 0x001F) / 62.0f,
+                                  1);
             return room_vertex;
         }
 
@@ -490,10 +489,10 @@ namespace loader
             // only in TR5
             room_vertex.normal = {0,0,0};
 
-            room_vertex.color.set(255,
-                                  gsl::narrow<irr::u8>(((room_vertex.lighting2 & 0x7C00) >> 10) / 31.0f * 255),
-                                  gsl::narrow<irr::u8>(((room_vertex.lighting2 & 0x03E0) >> 5) / 31.0f * 255),
-                                  gsl::narrow<irr::u8>((room_vertex.lighting2 & 0x001F) / 31.0f * 255));
+            room_vertex.color.set(((room_vertex.lighting2 & 0x7C00) >> 10) / 31.0f,
+                                  ((room_vertex.lighting2 & 0x03E0) >> 5) / 31.0f,
+                                  (room_vertex.lighting2 & 0x001F) / 31.0f,
+                                  1);
             return room_vertex;
         }
 
@@ -513,7 +512,7 @@ namespace loader
 
     struct Room
     {
-        irr::scene::ISceneNode* node = nullptr;
+        std::shared_ptr<render::Entity> node = nullptr;
 
         // Various room flags specify various room options. Mostly, they
         // specify environment type and some additional actions which should
@@ -1065,40 +1064,40 @@ namespace loader
             return room;
         }
 
-        irr::scene::IMeshSceneNode* createSceneNode(irr::scene::ISceneManager* mgr, int dumpIdx, const level::Level& level, const std::map<TextureLayoutProxy::TextureKey, irr::video::SMaterial>& materials, const std::vector<irr::video::ITexture*>& textures, const std::vector<irr::scene::SMesh*>& staticMeshes, render::TextureAnimator& animator);
+        std::shared_ptr<render::Entity> createSceneNode(int roomId, const level::Level& level, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures, const std::vector<osg::ref_ptr<osg::Geometry>>& staticMeshes, render::TextureAnimator& animator);
 
         const Sector* getSectorByAbsolutePosition(core::TRCoordinates position) const
         {
             position -= this->position;
-            return getSectorByIndex(position.X / SectorSize, position.Z / SectorSize);
+            return getSectorByIndex(position.X / core::SectorSize, position.Z / core::SectorSize);
         }
 
         bool isInnerPositionX(core::TRCoordinates position) const
         {
             position -= this->position;
-            int sx = position.X / SectorSize;
+            int sx = position.X / core::SectorSize;
             return sx > 0 && sx < sectorCountX - 1;
         }
 
         bool isInnerPositionZ(core::TRCoordinates position) const
         {
             position -= this->position;
-            int sz = position.Z / SectorSize;
+            int sz = position.Z / core::SectorSize;
             return sz > 0 && sz < sectorCountZ - 1;
         }
 
         bool isInnerPositionXZ(core::TRCoordinates position) const
         {
             position -= this->position;
-            int sx = position.X / SectorSize;
-            int sz = position.Z / SectorSize;
+            int sx = position.X / core::SectorSize;
+            int sz = position.Z / core::SectorSize;
             return sx > 0 && sx < sectorCountX - 1 && sz > 0 && sz < sectorCountZ - 1;
         }
 
         gsl::not_null<const Sector*> findFloorSectorWithClampedPosition(core::TRCoordinates position) const
         {
             position -= this->position;
-            return findFloorSectorWithClampedIndex(position.X / SectorSize, position.Z / SectorSize);
+            return findFloorSectorWithClampedIndex(position.X / core::SectorSize, position.Z / core::SectorSize);
         }
 
         const Sector* getSectorByIndex(int dx, int dz) const
@@ -1121,16 +1120,16 @@ namespace loader
             if( dz <= 0 )
             {
                 dz = 0;
-                dx = irr::core::clamp(dx, 1, sectorCountX - 2);
+                dx = osg::clampTo(dx, 1, sectorCountX - 2);
             }
             else if( dz >= sectorCountZ - 1 )
             {
                 dz = sectorCountZ - 1;
-                dx = irr::core::clamp(dx, 1, sectorCountX - 2);
+                dx = osg::clampTo(dx, 1, sectorCountX - 2);
             }
             else
             {
-                dx = irr::core::clamp(dx, 0, sectorCountX - 1);
+                dx = osg::clampTo(dx, 0, sectorCountX - 1);
             }
             return getSectorByIndex(dx, dz);
         }
@@ -1148,8 +1147,8 @@ namespace loader
     struct SpriteTexture
     {
         uint16_t texture;
-        irr::core::vector2df t0;
-        irr::core::vector2df t1;
+        osg::Vec2f t0;
+        osg::Vec2f t1;
 
         int16_t left_side;
         int16_t top_side;
@@ -1179,10 +1178,10 @@ namespace loader
 
             float w = tw / 256.0f;
             float h = th / 256.0f;
-            sprite_texture->t0.X = tx / 255.0f;
-            sprite_texture->t0.Y = ty / 255.0f;
-            sprite_texture->t1.X = sprite_texture->t0.X + w / 255.0f;
-            sprite_texture->t1.Y = sprite_texture->t0.Y + h / 255.0f;
+            sprite_texture->t0.x() = tx / 255.0f;
+            sprite_texture->t0.y() = ty / 255.0f;
+            sprite_texture->t1.x() = sprite_texture->t0.x() + w / 255.0f;
+            sprite_texture->t1.y() = sprite_texture->t0.y() + h / 255.0f;
 
             sprite_texture->left_side = tleft;
             sprite_texture->right_side = tright;
@@ -1207,10 +1206,10 @@ namespace loader
             int tright = reader.readI16();
             int tbottom = reader.readI16();
 
-            sprite_texture->t0.X = tleft / 255.0f;
-            sprite_texture->t0.Y = tright / 255.0f;
-            sprite_texture->t1.X = tbottom / 255.0f;
-            sprite_texture->t1.Y = ttop / 255.0f;
+            sprite_texture->t0.x() = tleft / 255.0f;
+            sprite_texture->t0.y() = tright / 255.0f;
+            sprite_texture->t1.x() = tbottom / 255.0f;
+            sprite_texture->t1.y() = ttop / 255.0f;
 
             sprite_texture->left_side = tx;
             sprite_texture->right_side = tx + tw / 256;
@@ -1219,17 +1218,36 @@ namespace loader
             return sprite_texture;
         }
 
-        irr::core::matrix4 buildTextureMatrix() const
+        osg::ref_ptr<osg::Geometry> buildGeometry(const gsl::not_null<osg::ref_ptr<osg::Texture2D>>& texture) const
         {
-            auto tscale = t1 - t0;
-            BOOST_ASSERT(tscale.X > 0);
-            BOOST_ASSERT(tscale.Y > 0);
+            osg::ref_ptr<osg::Geometry> spriteGeometry = new osg::Geometry();
 
-            irr::core::matrix4 mat;
-            mat.setTextureScale(tscale.X, tscale.Y);
-            mat.setTextureTranslate(t0.X, t0.Y);
+            // start is bottom left, then counter-clockwise
 
-            return mat;
+            osg::ref_ptr<osg::Vec3Array> coords = new osg::Vec3Array(4);
+            (*coords)[0] = osg::Vec3( left_side, bottom_side, 0 );
+            (*coords)[1] = osg::Vec3( right_side, bottom_side, 0 );
+            (*coords)[2] = osg::Vec3( right_side, top_side, 0 );
+            (*coords)[3] = osg::Vec3( left_side, top_side, 0 );
+            spriteGeometry->setVertexArray(coords);
+
+            // t0 is bottom left, t1 is top right
+            osg::ref_ptr<osg::Vec2Array> tcoords = new osg::Vec2Array(4);
+            (*tcoords)[0] = { t0.x(), t0.y() };
+            (*tcoords)[1] = { t1.x(), t0.y() };
+            (*tcoords)[2] = { t1.x(), t1.y() };
+            (*tcoords)[3] = { t0.x(), t1.y() };
+            spriteGeometry->setTexCoordArray(0, tcoords);
+
+            osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
+            stateSet->setTextureAttributeAndModes(0, texture.get(), osg::StateAttribute::ON);
+            stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+            stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+            stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
+
+            spriteGeometry->setStateSet(stateSet);
+
+            return spriteGeometry;
         }
     };
 

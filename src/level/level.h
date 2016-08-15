@@ -10,6 +10,8 @@
 #include "audio/device.h"
 #include "audio/streamsource.h"
 
+#include <osgViewer/Viewer>
+
 #include <memory>
 #include <vector>
 
@@ -95,7 +97,7 @@ namespace level
         engine::CameraController* m_cameraController = nullptr;
 
         static std::unique_ptr<Level> createLoader(const std::string& filename, Game game_version);
-        virtual void load(irr::video::IVideoDriver* drv) = 0;
+        virtual void load() = 0;
 
         loader::StaticMesh* findStaticMeshById(uint32_t object_id);
         const loader::StaticMesh* findStaticMeshById(uint32_t object_id) const;
@@ -105,14 +107,14 @@ namespace level
         boost::optional<size_t> findAnimatedModelIndexForType(uint32_t object_id) const;
         boost::optional<size_t> findSpriteSequenceForType(uint32_t object_id) const;
 
-        std::vector<irr::video::ITexture*> createTextures(irr::scene::ISceneManager* mgr);
-        std::map<loader::TextureLayoutProxy::TextureKey, irr::video::SMaterial> createMaterials(const std::vector<irr::video::ITexture*>& textures);
-        engine::LaraController* createItems(irr::scene::ISceneManager* mgr, const std::vector<irr::scene::ISkinnedMesh*>& skinnedMeshes, const std::vector<irr::video::ITexture*>& textures);
-        std::vector<irr::scene::ISkinnedMesh*> createSkinnedMeshes(irr::scene::ISceneManager* mgr, const std::vector<irr::scene::SMesh*>& staticMeshes);
-        loader::AnimatedModel::FrameRange loadAnimation(irr::u32& frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, irr::scene::ISkinnedMesh* skinnedMesh);
-        irr::video::ITexture* createSolidColorTex(irr::scene::ISceneManager* mgr, uint8_t color) const;
+        std::vector<osg::ref_ptr<osg::Texture2D>> createTextures();
+        loader::TextureLayoutProxy::MaterialMap createMaterials(const std::vector<osg::ref_ptr<osg::Texture2D>>& textures);
+        engine::LaraController* createItems(const std::vector<std::shared_ptr<render::SkeletalMesh>>& skinnedMeshes, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures);
+        std::vector<std::shared_ptr<render::SkeletalMesh>> createSkinnedMeshes(const std::vector<osg::ref_ptr<osg::Geometry>>& staticMeshes);
+        loader::AnimatedModel::FrameRange loadAnimation(uint32_t& frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, render::SkeletalMesh& skinnedMesh);
+        osg::ref_ptr<osg::Texture2D>createSolidColorTex(uint8_t color) const;
 
-        void toIrrlicht(irr::IrrlichtDevice* device);
+        void toIrrlicht(osgViewer::Viewer& viewer);
 
         gsl::not_null<const loader::Sector*> findFloorSectorWithClampedPosition(const core::TRCoordinates& position, gsl::not_null<const loader::Room*> room) const
         {
@@ -141,7 +143,7 @@ namespace level
                 sector = room->getSectorByAbsolutePosition(position);
             }
 
-            if( position.Y + loader::QuarterSectorSize * 2 < sector->floorHeight * loader::QuarterSectorSize )
+            if( position.Y + core::QuarterSectorSize * 2 < sector->floorHeight * core::QuarterSectorSize )
                 return {0,0};
             if( sector->floorDataIndex == 0 )
                 return {0,0};
@@ -154,13 +156,10 @@ namespace level
 
         engine::LaraController* m_lara = nullptr;
         std::shared_ptr<render::TextureAnimator> m_textureAnimator;
-        std::shared_ptr<EffectHandler> m_fx = nullptr;
 
         engine::ItemController* getItemController(uint16_t id) const;
 
-        void drawBars(irr::video::IVideoDriver* drv) const;
-
-        engine::ItemController* findControllerForNode(const irr::scene::ISceneNode* node);
+        void drawBars() const;
 
         std::unique_ptr<engine::InputHandler> m_inputHandler;
 
@@ -172,8 +171,8 @@ namespace level
             BOOST_LOG_TRIVIAL(debug) << "Playing sample #" << sample;
 
             Expects(sample < m_sampleIndices.size());
-            pitch = irr::core::clamp(pitch, 0.5f, 2.0f);
-            volume = irr::core::clamp(volume, 0.0f, 1.0f);
+            pitch = osg::clampTo(pitch, 0.5f, 2.0f);
+            volume = osg::clampTo(volume, 0.0f, 1.0f);
 
             std::shared_ptr<audio::BufferHandle> buf = std::make_shared<audio::BufferHandle>();
             const auto offset = m_sampleIndices[sample];
@@ -218,7 +217,7 @@ namespace level
             if(details.useRandomPitch())
                 pitch = 0.9f + 0.2f * rand() / RAND_MAX;
 
-            float volume = irr::core::clamp(static_cast<float>(details.volume) / 0x7fff, 0.0f, 1.0f);
+            float volume = osg::clampTo(static_cast<float>(details.volume) / 0x7fff, 0.0f, 1.0f);
             if(details.useRandomVolume())
                 volume -= 0.25f * rand() / RAND_MAX;
             if(volume <= 0)
@@ -315,7 +314,7 @@ namespace level
         static void convertTexture(loader::ByteTexture& tex, loader::Palette& pal, loader::DWordTexture& dst);
         static void convertTexture(loader::WordTexture& tex, loader::DWordTexture& dst);
 
-        void loadAnimFrame(irr::u32 frameIdx, irr::u32 frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, irr::scene::ISkinnedMesh* skinnedMesh, gsl::not_null<const int16_t*>& pData, irr::core::aabbox3di& bbox);
+        void loadAnimFrame(uint32_t frameIdx, uint32_t frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, render::SkeletalMesh& skeletalMesh, gsl::not_null<const int16_t*>& pData, osg::BoundingBoxImpl<osg::Vec3i>& bbox);
 
     private:
         static Game probeVersion(loader::io::SDLReader& reader, const std::string& filename);

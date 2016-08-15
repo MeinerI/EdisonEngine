@@ -36,11 +36,11 @@ namespace engine
         void init(const loader::Sector* roomSector, const core::TRCoordinates& position, const CameraController* camera, int floorHeight, int scalpHeight)
         {
             floor = HeightInfo::fromFloor(roomSector, position, camera);
-            if( floor.distance != -loader::HeightLimit )
+            if( floor.distance != -core::HeightLimit )
                 floor.distance -= floorHeight;
 
             ceiling = HeightInfo::fromCeiling(roomSector, position, camera);
-            if( ceiling.distance != -loader::HeightLimit )
+            if( ceiling.distance != -core::HeightLimit )
                 ceiling.distance -= floorHeight - scalpHeight;
         }
     };

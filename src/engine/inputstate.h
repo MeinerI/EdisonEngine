@@ -1,5 +1,7 @@
 #pragma once
 
+#include <osg/Vec2>
+
 namespace engine
 {
     enum class AxisMovement
@@ -23,7 +25,7 @@ namespace engine
         bool roll = false;
         bool action = false;
         bool freeLook = false;
-        irr::core::vector2df mouseMovement;
+        osg::Vec2 mouseMovement;
 
         void setXAxisMovement(bool left, bool right)
         {

@@ -1,12 +1,11 @@
 #include "animationcontroller.h"
 
 #include "laracontroller.h"
-
-#include <set>
+#include "render/entity.h"
 
 namespace engine
 {
-    MeshAnimationController::MeshAnimationController(gsl::not_null<const level::Level*> level, const loader::AnimatedModel& model, gsl::not_null<irr::scene::IAnimatedMeshSceneNode*> node, const std::string& name)
+    MeshAnimationController::MeshAnimationController(gsl::not_null<const level::Level*> level, const loader::AnimatedModel& model, const gsl::not_null<std::shared_ptr<render::Skeleton>>& node, const std::string& name)
         : AnimationController(level, name)
         , m_model(model)
         , m_currentAnimationId(model.animationIndex)
@@ -23,7 +22,7 @@ namespace engine
         m_targetState = getCurrentAnimState();
     }
 
-    void MeshAnimationController::startAnimLoop(irr::u32 localFrame)
+    void MeshAnimationController::startAnimLoop(uint32_t localFrame)
     {
         auto it = m_model.frameMapping.find(m_currentAnimationId);
         BOOST_ASSERT(it != m_model.frameMapping.end());
@@ -48,7 +47,7 @@ namespace engine
     }
 
 
-    irr::u32 MeshAnimationController::getCurrentFrame() const
+    uint32_t MeshAnimationController::getCurrentFrame() const
     {
         auto it = m_model.frameMapping.find(m_currentAnimationId);
         BOOST_ASSERT(it != m_model.frameMapping.end());
@@ -56,7 +55,7 @@ namespace engine
         return std::lround(m_node->getFrameNr() - it->second.offset + it->second.firstFrame);
     }
 
-    irr::u32 MeshAnimationController::getAnimEndFrame() const
+    uint32_t MeshAnimationController::getAnimEndFrame() const
     {
         auto it = m_model.frameMapping.find(m_currentAnimationId);
         BOOST_ASSERT(it != m_model.frameMapping.end());
@@ -64,7 +63,7 @@ namespace engine
         return it->second.lastFrame;
     }
 
-    irr::core::aabbox3di MeshAnimationController::getBoundingBox() const
+    osg::BoundingBoxImpl<osg::Vec3i> MeshAnimationController::getBoundingBox() const
     {
         auto it = m_model.frameMapping.find(m_currentAnimationId);
         BOOST_ASSERT(it != m_model.frameMapping.end());
@@ -72,7 +71,7 @@ namespace engine
         return it->second.getBoundingBox(getCurrentFrame());
     }
 
-    irr::u32 MeshAnimationController::getCurrentRelativeFrame() const
+    uint32_t MeshAnimationController::getCurrentRelativeFrame() const
     {
         auto it = m_model.frameMapping.find(m_currentAnimationId);
         BOOST_ASSERT(it != m_model.frameMapping.end());
@@ -87,7 +86,7 @@ namespace engine
         return currentAnim.state_id;
     }
 
-    void MeshAnimationController::playGlobalAnimation(uint16_t anim, const boost::optional<irr::u32>& firstFrame)
+    void MeshAnimationController::playGlobalAnimation(uint16_t anim, const boost::optional<uint32_t>& firstFrame)
     {
         auto it = m_model.frameMapping.find(anim);
         if( it == m_model.frameMapping.end() )

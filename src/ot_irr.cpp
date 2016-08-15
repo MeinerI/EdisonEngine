@@ -1,9 +1,10 @@
 #include "level/level.h"
-#include <EffectHandler.h>
 #include "engine/laracontroller.h"
 
 #include <boost/range/adaptors.hpp>
 
+#if 0
+//! @fixme Re-enable me!
 namespace
 {
     void drawText(irr::gui::IGUIEnvironment* env, int x, int y, const irr::core::stringw& txt, const irr::video::SColor& col = irr::video::SColor(255, 255, 255, 255))
@@ -72,28 +73,12 @@ namespace
         device->getGUIEnvironment()->drawAll();
     }
 }
+#endif
 
 int main()
 {
-#if defined(_MSC_VER)
-    const irr::video::E_DRIVER_TYPE driverType = irr::video::EDT_DIRECT3D9;
-#else
-    const irr::video::E_DRIVER_TYPE driverType = irr::video::EDT_OPENGL;
-#endif
-
-    irr::SIrrlichtCreationParameters driverParams;
-    driverParams.AntiAlias = 255;
-    driverParams.ZBufferBits = 32;
-    driverParams.Stencilbuffer = true;
-    driverParams.Vsync = false;
-    driverParams.Bits = 24;
-    driverParams.Fullscreen = false;
-    driverParams.DriverType = driverType;
-    driverParams.WindowSize = irr::core::dimension2d<irr::u32>(1024, 768);
-
-    irr::IrrlichtDevice* device = irr::createDeviceEx( driverParams );
-    if(!device)
-        return EXIT_FAILURE;
+    osgViewer::Viewer viewer;
+    viewer.setUpViewAcrossAllScreens();
 
     struct LevelInfo
     {
@@ -127,66 +112,41 @@ int main()
     auto lvl = level::Level::createLoader("data/tr1/data/" + lvlInfo.filename + ".PHD", level::Game::Unknown);
 
     BOOST_ASSERT(lvl != nullptr);
-    auto driver = device->getVideoDriver();
-    lvl->load(driver);
-    lvl->toIrrlicht(device);
-
-    device->setWindowCaption(L"EdisonEngine");
-
-    auto timer = device->getTimer();
-    auto lastTime = timer->getTime();
+    lvl->load();
+    lvl->toIrrlicht(viewer);
 
     if(lvlInfo.track > 0)
         lvl->playCdTrack(lvlInfo.track);
 
-    while(device->run())
+    viewer.realize();
+
+    while(!viewer.done())
     {
         lvl->m_audioDev.update();
 
-        //if(lvl->m_activeCDTrack > 0 && lvl->m_cdStream == nullptr)
-        //    lvl->playStream(lvl->m_activeCDTrack);
-
-        if(!device->isWindowActive())
-        {
-            lastTime = timer->getTime();
-            device->yield();
-            continue;
-        }
-
         lvl->m_inputHandler->update();
-
-        auto deltaTime = timer->getTime() - lastTime;
-        if(deltaTime <= 0)
-        {
-            device->yield();
-            continue;
-        }
-
-        lastTime = timer->getTime();
 
         for(const std::unique_ptr<engine::ItemController>& ctrl : lvl->m_itemControllers | boost::adaptors::map_values)
         {
             if(ctrl.get() == lvl->m_lara) // Lara is special and needs to be updated last
                 continue;
 
-            ctrl->update(deltaTime);
+            ctrl->update(1);
         }
 
-        lvl->m_lara->update(deltaTime);
-        lvl->m_cameraController->update(deltaTime);
+        lvl->m_lara->update(1);
+        lvl->m_cameraController->update(1);
 
         lvl->m_audioDev.setListenerTransform(lvl->m_cameraController->getPosition(),
                                              lvl->m_cameraController->getFrontVector(),
                                              lvl->m_cameraController->getUpVector());
 
-        device->getVideoDriver()->beginScene(true, true);
-        //device->getSceneManager()->drawAll();
-        lvl->m_fx->update();
-        lvl->drawBars(device->getVideoDriver());
+        viewer.frame();
 
+        lvl->drawBars();
+
+#if 0
         drawDebugInfo(device, lvl.get());
-
-        device->getVideoDriver()->endScene();
 
         // update information about current frame-rate
         irr::core::stringw str(L"FPS: ");
@@ -194,6 +154,7 @@ int main()
         str += L" Tris: ";
         str.append(irr::core::stringw(driver->getPrimitiveCountDrawn()));
         device->setWindowCaption(str.c_str());
+#endif
     }
 
     //device->drop();

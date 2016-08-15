@@ -9,16 +9,16 @@
 
 namespace engine
 {
-    CameraController::CameraController(gsl::not_null<level::Level*> level, gsl::not_null<LaraController*> laraController, gsl::not_null<irr::video::IVideoDriver*> drv, const gsl::not_null<irr::scene::ICameraSceneNode*>& camera)
-        : ISceneNodeAnimator()
-        , m_camera(camera)
+    CameraController::CameraController(gsl::not_null<level::Level*> level, gsl::not_null<LaraController*> laraController, const gsl::not_null<osg::ref_ptr<osg::Camera>>& camera)
+        : m_camera(camera)
         , m_level(level)
         , m_laraController(laraController)
         , m_currentYOffset(gsl::narrow_cast<int>(laraController->getPosition().Y - 1024))
         , m_currentLookAt(laraController->getCurrentRoom(), m_laraController->getPosition().toInexact())
         , m_currentPosition(laraController->getCurrentRoom())
-        , m_driver(drv)
     {
+        m_cameraPosition->addChild(m_camera.get());
+
         m_currentLookAt.position.Y -= m_currentYOffset;
         m_currentPosition = m_currentLookAt;
         m_currentPosition.position.Z -= 100;
@@ -26,49 +26,15 @@ namespace engine
         update(1000 / core::FrameRate);
     }
 
-    void CameraController::animateNode(irr::scene::ISceneNode* node, irr::u32 timeMs)
+    bool CameraController::run(osg::Object* object, osg::Object* data)
     {
-        Expects(node == m_camera);
+        Expects(object == m_camera.get());
 
-        irr::scene::ISceneManager* smgr = node->getSceneManager();
-        if( smgr && smgr->getActiveCamera() != m_camera )
-            return;
-
-
-        if( m_firstUpdate )
-        {
-            m_lastAnimationTime = timeMs;
-            m_firstUpdate = false;
-        }
-
-        // If the camera isn't the active camera, and receiving input, then don't process it.
-        if( !m_camera->isInputReceiverEnabled() )
-        {
-            m_firstInput = true;
-            return;
-        }
-
-        if( m_firstInput )
-        {
-            m_firstInput = false;
-        }
-
-        const auto localTime = timeMs - m_lastAnimationTime;
-
-        if( localTime <= 1 )
-            return;
-
-        m_lastAnimationTime = timeMs;
-
-        m_localRotation.X = irr::core::clamp(m_localRotation.X, -85_deg, +85_deg);
+        m_localRotation.X = osg::clampTo(m_localRotation.X, -85_deg, +85_deg);
 
         tracePortals();
-    }
 
-    irr::scene::ISceneNodeAnimator* CameraController::createClone(irr::scene::ISceneNode*, irr::scene::ISceneManager*)
-    {
-        BOOST_ASSERT(false);
-        return nullptr;
+        return Callback::run(object, data);
     }
 
     void CameraController::setLocalRotation(core::Angle x, core::Angle y)
@@ -171,26 +137,26 @@ namespace engine
 
     void CameraController::tracePortals()
     {
+#if 0
         bool cameraOutOfGeometry = true;
-        for( size_t i = 0; i < m_level->m_rooms.size(); ++i )
+        for(size_t i = 0; i < m_level->m_rooms.size(); ++i)
         {
             const loader::Room& room = m_level->m_rooms[i];
-            if( room.node->getTransformedBoundingBox().isPointInside(m_camera->getAbsolutePosition()) )
+            if(room.node->getTransformedBoundingBox().isPointInside(m_cameraPosition->getPosition()))
             {
                 cameraOutOfGeometry = false;
                 break;
             }
         }
 
-        for( const loader::Room& room : m_level->m_rooms )
+        for(const loader::Room& room : m_level->m_rooms)
             room.node->setVisible(cameraOutOfGeometry);
 
-        if( cameraOutOfGeometry )
+        if(cameraOutOfGeometry)
         {
             return;
         }
 
-#if 0
         // First, find the room the camera is actually in.
 
         const loader::Room* startRoom = m_laraController->getCurrentRoom();
@@ -230,7 +196,7 @@ namespace engine
         for( const loader::Portal& portal : startRoom->portals )
         {
             render::PortalTracer path;
-            if( !path.checkVisibility(&portal, *m_camera, m_driver) )
+            if( !path.checkVisibility(&portal, *m_camera.get(), m_cameraPosition->getPosition()) )
                 continue;
 
             m_level->m_rooms[portal.adjoining_room].node->setVisible(true);
@@ -255,7 +221,7 @@ namespace engine
             for( const loader::Portal& srcPortal : m_level->m_rooms[destRoom].portals )
             {
                 render::PortalTracer newPath = currentPath;
-                if( !newPath.checkVisibility(&srcPortal, *m_camera, m_driver) )
+                if( !newPath.checkVisibility(&srcPortal, *m_camera.get(), m_cameraPosition->getPosition()) )
                     continue;
 
                 m_level->m_rooms[srcPortal.adjoining_room].node->setVisible(true);
@@ -302,15 +268,15 @@ namespace engine
         const int sign = d.X < 0 ? -1 : 1;
 
         core::TRCoordinates testPos;
-        testPos.X = (m_currentLookAt.position.X / loader::SectorSize) * loader::SectorSize;
+        testPos.X = (m_currentLookAt.position.X / core::SectorSize) * core::SectorSize;
         if( sign > 0 )
-            testPos.X += loader::SectorSize - 1;
+            testPos.X += core::SectorSize - 1;
 
         testPos.Y = m_currentLookAt.position.Y + (testPos.X - m_currentLookAt.position.X) * d.Y / d.X;
         testPos.Z = m_currentLookAt.position.Z + (testPos.X - m_currentLookAt.position.X) * d.Z / d.X;
 
         core::TRCoordinates step;
-        step.X = sign * loader::SectorSize;
+        step.X = sign * core::SectorSize;
         step.Y = step.X * d.Y / d.X;
         step.Z = step.X * d.Z / d.X;
 
@@ -330,7 +296,7 @@ namespace engine
             }
 
             core::TRCoordinates heightPos = testPos;
-            BOOST_ASSERT(heightPos.X % loader::SectorSize == 0 || heightPos.X % loader::SectorSize == loader::SectorSize - 1);
+            BOOST_ASSERT(heightPos.X % core::SectorSize == 0 || heightPos.X % core::SectorSize == core::SectorSize - 1);
             auto sector = m_level->findFloorSectorWithClampedPosition(heightPos, &newRoom);
             if( testPos.Y > HeightInfo::fromFloor(sector, heightPos, this).distance || testPos.Y < HeightInfo::fromCeiling(sector, heightPos, this).distance )
             {
@@ -340,7 +306,7 @@ namespace engine
             }
 
             heightPos.X = testPos.X + sign;
-            BOOST_ASSERT(heightPos.X % loader::SectorSize == 0 || heightPos.X % loader::SectorSize == loader::SectorSize - 1);
+            BOOST_ASSERT(heightPos.X % core::SectorSize == 0 || heightPos.X % core::SectorSize == core::SectorSize - 1);
             const auto testRoom = newRoom;
             sector = m_level->findFloorSectorWithClampedPosition(heightPos, &newRoom);
             if( testPos.Y > HeightInfo::fromFloor(sector, heightPos, this).distance || testPos.Y < HeightInfo::fromCeiling(sector, heightPos, this).distance )
@@ -366,16 +332,16 @@ namespace engine
         const int sign = d.Z < 0 ? -1 : 1;
 
         core::TRCoordinates testPos;
-        testPos.Z = (m_currentLookAt.position.Z / loader::SectorSize) * loader::SectorSize;
+        testPos.Z = (m_currentLookAt.position.Z / core::SectorSize) * core::SectorSize;
 
         if( sign > 0 )
-            testPos.Z += loader::SectorSize - 1;
+            testPos.Z += core::SectorSize - 1;
 
         testPos.X = m_currentLookAt.position.X + (testPos.Z - m_currentLookAt.position.Z) * d.X / d.Z;
         testPos.Y = m_currentLookAt.position.Y + (testPos.Z - m_currentLookAt.position.Z) * d.Y / d.Z;
 
         core::TRCoordinates step;
-        step.Z = sign * loader::SectorSize;
+        step.Z = sign * core::SectorSize;
         step.X = step.Z * d.X / d.Z;
         step.Y = step.Z * d.Y / d.Z;
 
@@ -395,7 +361,7 @@ namespace engine
             }
 
             core::TRCoordinates heightPos = testPos;
-            BOOST_ASSERT(heightPos.Z % loader::SectorSize == 0 || heightPos.Z % loader::SectorSize == loader::SectorSize - 1);
+            BOOST_ASSERT(heightPos.Z % core::SectorSize == 0 || heightPos.Z % core::SectorSize == core::SectorSize - 1);
             auto sector = m_level->findFloorSectorWithClampedPosition(heightPos, &newRoom);
             if( testPos.Y > HeightInfo::fromFloor(sector, heightPos, this).distance || testPos.Y < HeightInfo::fromCeiling(sector, heightPos, this).distance )
             {
@@ -405,7 +371,7 @@ namespace engine
             }
 
             heightPos.Z = testPos.Z + sign;
-            BOOST_ASSERT(heightPos.Z % loader::SectorSize == 0 || heightPos.Z % loader::SectorSize == loader::SectorSize - 1);
+            BOOST_ASSERT(heightPos.Z % core::SectorSize == 0 || heightPos.Z % core::SectorSize == core::SectorSize - 1);
             const auto testRoom = newRoom;
             sector = m_level->findFloorSectorWithClampedPosition(heightPos, &newRoom);
             if( testPos.Y > HeightInfo::fromFloor(sector, heightPos, this).distance || testPos.Y < HeightInfo::fromCeiling(sector, heightPos, this).distance )
@@ -480,9 +446,9 @@ namespace engine
         auto lookAtBbox = lookAtItem->getBoundingBox();
         int lookAtY = gsl::narrow_cast<int>(lookAtItem->getPosition().Y);
         if( lookingAtSomething )
-            lookAtY += (lookAtBbox.MinEdge.Y + lookAtBbox.MaxEdge.Y) / 2;
+            lookAtY += (lookAtBbox.yMin() + lookAtBbox.yMax()) / 2;
         else
-            lookAtY += (lookAtBbox.MinEdge.Y - lookAtBbox.MaxEdge.Y) * 3 / 4 + lookAtBbox.MaxEdge.Y;
+            lookAtY += (lookAtBbox.yMin() - lookAtBbox.yMax()) * 3 / 4 + lookAtBbox.yMax();
 
         if( m_lookAtItem != nullptr && !lookingAtSomething )
         {
@@ -491,7 +457,7 @@ namespace engine
             auto lookAtYAngle = -core::Angle::fromRad(std::atan2(m_lookAtItem->getPosition().X - lookAtItem->getPosition().X, m_lookAtItem->getPosition().Z - lookAtItem->getPosition().Z)) - lookAtItem->getRotation().Y;
             lookAtYAngle *= 0.5f;
             lookAtBbox = m_lookAtItem->getBoundingBox();
-            auto lookAtXAngle = -core::Angle::fromRad(std::atan2(distToLookAt, lookAtY - (lookAtBbox.MinEdge.Y + lookAtBbox.MaxEdge.Y) / 2 + m_lookAtItem->getPosition().Y));
+            auto lookAtXAngle = -core::Angle::fromRad(std::atan2(distToLookAt, lookAtY - (lookAtBbox.yMin() + lookAtBbox.yMax()) / 2 + m_lookAtItem->getPosition().Y));
             lookAtXAngle *= 0.5f;
 
             if( lookAtYAngle < 50_deg && lookAtYAngle > -50_deg && lookAtXAngle < 85_deg && lookAtXAngle > -85_deg )
@@ -528,7 +494,7 @@ namespace engine
 
             if( m_unknown1 == 1 )
             {
-                const auto midZ = (lookAtBbox.MinEdge.Z + lookAtBbox.MaxEdge.Z) / 2;
+                const auto midZ = (lookAtBbox.zMin() + lookAtBbox.zMax()) / 2;
                 m_currentLookAt.position.Z += std::lround(midZ * lookAtItem->getRotation().Y.cos());
                 m_currentLookAt.position.X += std::lround(midZ * lookAtItem->getRotation().Y.sin());
             }
@@ -559,12 +525,12 @@ namespace engine
         {
             if( m_lookingAtSomething )
             {
-                m_currentLookAt.position.Y = lookAtY - loader::QuarterSectorSize;
+                m_currentLookAt.position.Y = lookAtY - core::QuarterSectorSize;
                 m_smoothFactor = 1;
             }
             else
             {
-                m_currentLookAt.position.Y += (lookAtY - loader::QuarterSectorSize - m_currentLookAt.position.Y) / 4;
+                m_currentLookAt.position.Y += (lookAtY - core::QuarterSectorSize - m_currentLookAt.position.Y) / 4;
                 if( m_camOverrideType == 2 )
                     m_smoothFactor = 4;
                 else
@@ -590,8 +556,6 @@ namespace engine
             m_unknown1 = 0;
         }
         HeightInfo::skipSteepSlants = false;
-
-        m_camera->updateAbsolutePosition();
     }
 
     void CameraController::handleCamOverride(int deltaTimeMs)
@@ -605,7 +569,7 @@ namespace engine
         pos.position.Z = m_level->m_cameras[m_camOverrideId].z;
 
         if( !clampPosition(pos) )
-            moveIntoGeometry(pos, loader::QuarterSectorSize);
+            moveIntoGeometry(pos, core::QuarterSectorSize);
 
         m_lookingAtSomething = true;
         updatePosition(pos, m_smoothFactor, deltaTimeMs);
@@ -661,15 +625,15 @@ namespace engine
         HeightInfo::skipSteepSlants = false;
         m_currentPosition.room = position.room;
         auto sector = m_level->findFloorSectorWithClampedPosition(m_currentPosition);
-        auto floor = HeightInfo::fromFloor(sector, m_currentPosition.position, this).distance - loader::QuarterSectorSize;
+        auto floor = HeightInfo::fromFloor(sector, m_currentPosition.position, this).distance - core::QuarterSectorSize;
         if( floor <= m_currentPosition.position.Y && floor <= position.position.Y )
         {
             clampPosition(m_currentPosition);
             sector = m_level->findFloorSectorWithClampedPosition(m_currentPosition);
-            floor = HeightInfo::fromFloor(sector, m_currentPosition.position, this).distance - loader::QuarterSectorSize;
+            floor = HeightInfo::fromFloor(sector, m_currentPosition.position, this).distance - core::QuarterSectorSize;
         }
 
-        auto ceiling = HeightInfo::fromCeiling(sector, m_currentPosition.position, this).distance + loader::QuarterSectorSize;
+        auto ceiling = HeightInfo::fromCeiling(sector, m_currentPosition.position, this).distance + core::QuarterSectorSize;
         if( floor < ceiling )
         {
             floor = ceiling = (floor + ceiling) / 2;
@@ -701,8 +665,11 @@ namespace engine
         // update current room
         m_level->findFloorSectorWithClampedPosition(camPos, &m_currentPosition.room);
 
-        m_camera->setPosition(camPos.toIrrlicht());
+        m_cameraPosition->setPosition(camPos.toIrrlicht());
+        osg::Quat q;
+        q.makeRotate();
         m_camera->setTarget(m_currentLookAt.position.toIrrlicht());
+        m_cameraPosition->setAttitude(q);
     }
 
     void CameraController::doUsualMovement(const gsl::not_null<const ItemController*>& item, int deltaTimeMs)
@@ -738,7 +705,7 @@ namespace engine
         m_localRotation.X = m_torsoRotation.X + m_headRotation.X + item.getRotation().X;
         m_localRotation.Y = m_torsoRotation.Y + m_headRotation.Y + item.getRotation().Y;
         m_distanceFromLookAt = 1536;
-        m_currentYOffset = gsl::narrow_cast<int>(-2 * loader::QuarterSectorSize * m_localRotation.Y.sin());
+        m_currentYOffset = gsl::narrow_cast<int>(-2 * core::QuarterSectorSize * m_localRotation.Y.sin());
         m_currentLookAt.position.X += std::lround(m_currentYOffset * item.getRotation().Y.sin());
         m_currentLookAt.position.Z += std::lround(m_currentYOffset * item.getRotation().Y.cos());
 
@@ -748,7 +715,7 @@ namespace engine
             m_currentLookAt.position.Z = std::lround(item.getPosition().Z);
         }
 
-        m_currentLookAt.position.Y += moveIntoGeometry(m_currentLookAt, loader::QuarterSectorSize + 50);
+        m_currentLookAt.position.Y += moveIntoGeometry(m_currentLookAt, core::QuarterSectorSize + 50);
 
         auto tmp = m_currentLookAt;
         tmp.position.X -= std::lround(m_distanceFromLookAt * m_localRotation.Y.sin() * m_localRotation.X.cos());
@@ -809,8 +776,8 @@ namespace engine
         }
 
         core::TRCoordinates testPos = camTargetPos.position;
-        testPos.Z = (testPos.Z / loader::SectorSize) * loader::SectorSize - 1;
-        BOOST_ASSERT(testPos.Z % loader::SectorSize == loader::SectorSize - 1 && std::abs(testPos.Z - camTargetPos.position.Z) <= loader::SectorSize);
+        testPos.Z = (testPos.Z / core::SectorSize) * core::SectorSize - 1;
+        BOOST_ASSERT(testPos.Z % core::SectorSize == core::SectorSize - 1 && std::abs(testPos.Z - camTargetPos.position.Z) <= core::SectorSize);
 
         auto clampZMin = clampBox->zmin;
         const bool negZverticalOutside = isVerticallyOutsideRoom(testPos, camTargetPos.room);
@@ -820,11 +787,11 @@ namespace engine
             if( testBox->zmin < clampZMin )
                 clampZMin = testBox->zmin;
         }
-        clampZMin += loader::QuarterSectorSize;
+        clampZMin += core::QuarterSectorSize;
 
         testPos = camTargetPos.position;
-        testPos.Z = (testPos.Z / loader::SectorSize + 1) * loader::SectorSize;
-        BOOST_ASSERT(testPos.Z % loader::SectorSize == 0 && std::abs(testPos.Z - camTargetPos.position.Z) <= loader::SectorSize);
+        testPos.Z = (testPos.Z / core::SectorSize + 1) * core::SectorSize;
+        BOOST_ASSERT(testPos.Z % core::SectorSize == 0 && std::abs(testPos.Z - camTargetPos.position.Z) <= core::SectorSize);
 
         auto clampZMax = clampBox->zmax;
         const bool posZverticalOutside = isVerticallyOutsideRoom(testPos, camTargetPos.room);
@@ -834,11 +801,11 @@ namespace engine
             if( testBox->zmax > clampZMax )
                 clampZMax = testBox->zmax;
         }
-        clampZMax -= loader::QuarterSectorSize;
+        clampZMax -= core::QuarterSectorSize;
 
         testPos = camTargetPos.position;
-        testPos.X = (testPos.X / loader::SectorSize) * loader::SectorSize - 1;
-        BOOST_ASSERT(testPos.X % loader::SectorSize == loader::SectorSize - 1 && std::abs(testPos.X - camTargetPos.position.X) <= loader::SectorSize);
+        testPos.X = (testPos.X / core::SectorSize) * core::SectorSize - 1;
+        BOOST_ASSERT(testPos.X % core::SectorSize == core::SectorSize - 1 && std::abs(testPos.X - camTargetPos.position.X) <= core::SectorSize);
 
         auto clampXMin = clampBox->xmin;
         const bool negXverticalOutside = isVerticallyOutsideRoom(testPos, camTargetPos.room);
@@ -848,11 +815,11 @@ namespace engine
             if( testBox->xmin < clampXMin )
                 clampXMin = testBox->xmin;
         }
-        clampXMin += loader::QuarterSectorSize;
+        clampXMin += core::QuarterSectorSize;
 
         testPos = camTargetPos.position;
-        testPos.X = (testPos.X / loader::SectorSize + 1) * loader::SectorSize;
-        BOOST_ASSERT(testPos.X % loader::SectorSize == 0 && std::abs(testPos.X - camTargetPos.position.X) <= loader::SectorSize);
+        testPos.X = (testPos.X / core::SectorSize + 1) * core::SectorSize;
+        BOOST_ASSERT(testPos.X % core::SectorSize == 0 && std::abs(testPos.X - camTargetPos.position.X) <= core::SectorSize);
 
         auto clampXMax = clampBox->xmax;
         const bool posXverticalOutside = isVerticallyOutsideRoom(testPos, camTargetPos.room);
@@ -862,7 +829,7 @@ namespace engine
             if( testBox->xmax > clampXMax )
                 clampXMax = testBox->xmax;
         }
-        clampXMax -= loader::QuarterSectorSize;
+        clampXMax -= core::QuarterSectorSize;
 
         bool skipRoomPatch = true;
         if( negZverticalOutside && camTargetPos.position.Z < clampZMin )
@@ -983,7 +950,7 @@ namespace engine
             return;
         }
 
-        if( backRightDistSq > loader::QuarterSectorSize * loader::QuarterSectorSize )
+        if( backRightDistSq > core::QuarterSectorSize * core::QuarterSectorSize )
         {
             currentFrontBack = back;
             currentLeftRight = right;
@@ -1008,7 +975,7 @@ namespace engine
             return;
         }
 
-        if( targetBackLeftDistSq > loader::QuarterSectorSize * loader::QuarterSectorSize )
+        if( targetBackLeftDistSq > core::QuarterSectorSize * core::QuarterSectorSize )
         {
             currentFrontBack = back;
             currentLeftRight = left;

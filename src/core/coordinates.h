@@ -1,6 +1,7 @@
 #pragma once
 
-#include <irrlicht.h>
+#include <osg/Vec3f>
+
 #include <gsl.h>
 
 #include <cmath>
@@ -19,10 +20,10 @@ namespace core
         TRCoordinates() = default;
         TRCoordinates(const TRCoordinates&) = default;
 
-        explicit TRCoordinates(const irr::core::vector3df& v)
-            : X(std::lround(v.X))
-              , Y(-std::lround(v.Y))
-              , Z(std::lround(v.Z))
+        explicit TRCoordinates(const osg::Vec3f& v)
+            : X(std::lround(v.x()))
+            , Y(-std::lround(v.y()))
+            , Z(std::lround(v.z()))
         {
         }
 
@@ -59,9 +60,9 @@ namespace core
 
         TRCoordinates& operator=(const TRCoordinates&) = default;
 
-        irr::core::vector3df toIrrlicht() const noexcept
+        osg::Vec3f toIrrlicht() const noexcept
         {
-            return {gsl::narrow_cast<irr::f32>(X), -gsl::narrow_cast<irr::f32>(Y), gsl::narrow_cast<irr::f32>(Z)};
+            return {gsl::narrow_cast<float>(X), -gsl::narrow_cast<float>(Y), gsl::narrow_cast<float>(Z)};
         }
     };
 
@@ -72,10 +73,10 @@ namespace core
         ExactTRCoordinates() = default;
         ExactTRCoordinates(const ExactTRCoordinates&) = default;
 
-        explicit ExactTRCoordinates(const irr::core::vector3df& v)
-            : X(v.X)
-            , Y(-v.Y)
-            , Z(v.Z)
+        explicit ExactTRCoordinates(const osg::Vec3f& v)
+            : X(v.x())
+            , Y(-v.y())
+            , Z(v.z())
         {
         }
 
@@ -151,7 +152,7 @@ namespace core
             return *this;
         }
 
-        irr::core::vector3df toIrrlicht() const noexcept
+        osg::Vec3f toIrrlicht() const noexcept
         {
             return {X, -Y, Z};
         }
