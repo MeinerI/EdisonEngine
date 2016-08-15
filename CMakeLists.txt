@@ -115,7 +115,7 @@ ot_find_dependency_alt(freetype Freetype)
 target_include_directories(freetype INTERFACE ${FREETYPE_INCLUDE_DIRS})
 target_link_libraries(freetype INTERFACE ${FREETYPE_LIBRARIES})
 
-find_package(OpenSceneGraph REQUIRED)
+find_package(OpenSceneGraph REQUIRED COMPONENTS osgAnimation osgViewer osgGA)
 add_library(OpenSceneGraph INTERFACE)
 target_include_directories(OpenSceneGraph INTERFACE ${OPENSCENEGRAPH_INCLUDE_DIRS})
 target_link_libraries(OpenSceneGraph INTERFACE ${OPENSCENEGRAPH_LIBRARIES})

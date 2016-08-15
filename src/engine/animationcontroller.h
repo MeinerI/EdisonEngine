@@ -5,11 +5,6 @@
 
 #include <boost/optional.hpp>
 
-namespace render
-{
-class Skeleton;
-}
-
 namespace engine
 {
 /**
@@ -48,10 +43,9 @@ class MeshAnimationController final : public AnimationController
     const loader::AnimatedModel& m_model;
     uint16_t m_currentAnimationId;
     uint16_t m_targetState = 0;
-    std::shared_ptr<render::Skeleton> m_node;
 
 public:
-    MeshAnimationController(gsl::not_null<const level::Level*> level, const loader::AnimatedModel& model, const gsl::not_null<std::shared_ptr<render::Skeleton>>& node, const std::string& name);
+    MeshAnimationController(gsl::not_null<const level::Level*> level, const loader::AnimatedModel& model, const std::string& name);
 
     void setTargetState(uint16_t state) noexcept
     {

@@ -88,7 +88,7 @@ namespace loader
             return mesh;
         }
 
-        osg::ref_ptr<osg::Geometry> createMesh(const std::vector<TextureLayoutProxy>& textureProxies, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::StateSet>>& colorMaterials, render::TextureAnimator& animator) const;
+        osg::ref_ptr<osg::Geode> createMesh(const std::vector<TextureLayoutProxy>& textureProxies, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::StateSet>>& colorMaterials, render::TextureAnimator& animator) const;
     };
 
     struct RoomStaticMesh

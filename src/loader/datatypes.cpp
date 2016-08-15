@@ -44,7 +44,7 @@ GLuint addVertex(gsl::not_null<osg::ref_ptr<osg::Geometry>> geom, uint16_t verte
 }
 } // anonymous namespace
 
-std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::Level& level, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures, const std::vector<osg::ref_ptr<osg::Geometry>>& staticMeshes, render::TextureAnimator& animator)
+std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::Level& level, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures, const std::vector<osg::ref_ptr<osg::Geode>>& staticMeshes, render::TextureAnimator& animator)
 {
     // texture => mesh buffer
     std::map<TextureLayoutProxy::TextureKey, osg::ref_ptr<osg::Geometry>> geometries;
@@ -194,8 +194,7 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
 osg::ref_ptr<osg::Texture2D> DWordTexture::toTexture()
 {
     osg::ref_ptr<osg::Image> img{new osg::Image()};
-    img->allocateImage(256, 256, 0, GL_RGBA8, GL_FLOAT);
-    std::copy_n(&pixels[0][0], &pixels[0][0] + 256 * 256, reinterpret_cast<GLfloat*>(img->data()));
+    img->setImage(256, 256, 1, GL_RGBA, GL_RGBA, GL_FLOAT, reinterpret_cast<unsigned char*>(&pixels[0][0]), osg::Image::AllocationMode::NO_DELETE);
 
     osg::ref_ptr<osg::Texture2D> tex{ new osg::Texture2D() };
     tex->setImage(img);

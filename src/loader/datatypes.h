@@ -1064,7 +1064,7 @@ namespace loader
             return room;
         }
 
-        std::shared_ptr<render::Entity> createSceneNode(int roomId, const level::Level& level, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures, const std::vector<osg::ref_ptr<osg::Geometry>>& staticMeshes, render::TextureAnimator& animator);
+        std::shared_ptr<render::Entity> createSceneNode(int roomId, const level::Level& level, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures, const std::vector<osg::ref_ptr<osg::Geode>>& staticMeshes, render::TextureAnimator& animator);
 
         const Sector* getSectorByAbsolutePosition(core::TRCoordinates position) const
         {

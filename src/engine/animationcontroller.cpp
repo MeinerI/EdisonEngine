@@ -1,82 +1,71 @@
 #include "animationcontroller.h"
 
 #include "laracontroller.h"
-#include "render/entity.h"
+
 
 namespace engine
 {
-    MeshAnimationController::MeshAnimationController(gsl::not_null<const level::Level*> level, const loader::AnimatedModel& model, const gsl::not_null<std::shared_ptr<render::Skeleton>>& node, const std::string& name)
+    MeshAnimationController::MeshAnimationController(gsl::not_null<const level::Level*> level, const loader::AnimatedModel& model, const std::string& name)
         : AnimationController(level, name)
         , m_model(model)
         , m_currentAnimationId(model.animationIndex)
-        , m_node(node)
     {
-        auto it = model.frameMapping.find(m_currentAnimationId);
-        if( it == model.frameMapping.end() )
+        if( m_currentAnimationId >= model.animations.size() )
         {
             BOOST_LOG_TRIVIAL(error) << "No initial animation for " << name;
             return;
         }
 
-        startAnimLoop(it->second.firstFrame);
+        startAnimLoop(model.animations[m_currentAnimationId].firstFrame);
         m_targetState = getCurrentAnimState();
     }
 
     void MeshAnimationController::startAnimLoop(uint32_t localFrame)
     {
-        auto it = m_model.frameMapping.find(m_currentAnimationId);
-        BOOST_ASSERT(it != m_model.frameMapping.end());
-        it->second.apply(m_node, localFrame);
+        BOOST_ASSERT(m_currentAnimationId < m_model.animations.size());
+        m_model.animations[m_currentAnimationId].apply(m_model, localFrame);
     }
 
     void MeshAnimationController::advanceFrame()
     {
-        BOOST_LOG_TRIVIAL(debug) << "Advance frame: current=" << m_node->getFrameNr() << ", end=" << m_node->getEndFrame();
-        if(m_node->getFrameNr() + 1 >= m_node->getEndFrame())
+        BOOST_LOG_TRIVIAL(debug) << "Advance frame: current time=" << m_model.timeline->getCurrentTime() << ", duration=" << m_model.timeline->getDuration();
+        if(m_model.timeline->getCurrentFrame() + 1 >= m_model.timeline->getNumFrames())
         {
             handleAnimationEnd();
         }
         else
         {
-            m_node->setCurrentFrame(m_node->getFrameNr() + 1);
+            m_model.timeline->gotoFrame(m_model.timeline->getCurrentFrame() + 1);
         }
 
         handleTRTransitions();
-
-        m_node->animateJoints();
     }
 
 
     uint32_t MeshAnimationController::getCurrentFrame() const
     {
-        auto it = m_model.frameMapping.find(m_currentAnimationId);
-        BOOST_ASSERT(it != m_model.frameMapping.end());
+        BOOST_ASSERT(m_currentAnimationId < m_model.animations.size());
 
-        return std::lround(m_node->getFrameNr() - it->second.offset + it->second.firstFrame);
+        return m_model.timeline->getCurrentFrame() + m_model.animations[m_currentAnimationId].firstFrame;
     }
 
     uint32_t MeshAnimationController::getAnimEndFrame() const
     {
-        auto it = m_model.frameMapping.find(m_currentAnimationId);
-        BOOST_ASSERT(it != m_model.frameMapping.end());
+        BOOST_ASSERT(m_currentAnimationId < m_model.animations.size());
 
-        return it->second.lastFrame;
+        return m_model.animations[m_currentAnimationId].lastFrame;
     }
 
     osg::BoundingBoxImpl<osg::Vec3i> MeshAnimationController::getBoundingBox() const
     {
-        auto it = m_model.frameMapping.find(m_currentAnimationId);
-        BOOST_ASSERT(it != m_model.frameMapping.end());
+        BOOST_ASSERT(m_currentAnimationId < m_model.animations.size());
 
-        return it->second.getBoundingBox(getCurrentFrame());
+        return m_model.animations[m_currentAnimationId].getBoundingBox(getCurrentFrame());
     }
 
     uint32_t MeshAnimationController::getCurrentRelativeFrame() const
     {
-        auto it = m_model.frameMapping.find(m_currentAnimationId);
-        BOOST_ASSERT(it != m_model.frameMapping.end());
-
-        return std::lround(m_node->getFrameNr() - it->second.offset);
+        return m_model.timeline->getCurrentFrame();
     }
 
     uint16_t MeshAnimationController::getCurrentAnimState() const
@@ -88,15 +77,14 @@ namespace engine
 
     void MeshAnimationController::playGlobalAnimation(uint16_t anim, const boost::optional<uint32_t>& firstFrame)
     {
-        auto it = m_model.frameMapping.find(anim);
-        if( it == m_model.frameMapping.end() )
+        if(m_currentAnimationId >= m_model.animations.size())
         {
             BOOST_LOG_TRIVIAL(error) << "No animation " << anim << " for " << getName();
             return;
         }
 
         m_currentAnimationId = anim;
-        it->second.apply(m_node, firstFrame.get_value_or(it->second.firstFrame));
+        m_model.animations[m_currentAnimationId].apply(m_model, firstFrame.get_value_or(m_model.animations[m_currentAnimationId].firstFrame));
         //m_targetState = getCurrentState();
 
         BOOST_LOG_TRIVIAL(debug) << "Playing animation " << anim << ", state " << getCurrentAnimState();

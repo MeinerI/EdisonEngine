@@ -37,13 +37,7 @@
 #include <boost/format.hpp>
 
 #include <algorithm>
-#include <stack>
 #include <set>
-
-#include <osgAnimation/Bone>
-#include <osgAnimation/UpdateBone>
-#include <osgAnimation/StackedQuaternionElement>
-#include <osgAnimation/StackedTranslateElement>
 
 using namespace level;
 
@@ -374,7 +368,7 @@ loader::TextureLayoutProxy::MaterialMap Level::createMaterials(const std::vector
     return materials;
 }
 
-engine::LaraController* Level::createItems(const std::vector<std::shared_ptr<render::SkeletalMesh>>& skinnedMeshes, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures)
+engine::LaraController* Level::createItems(const std::vector<osg::ref_ptr<osg::Texture2D>>& textures)
 {
     engine::LaraController* lara = nullptr;
     int id = -1;
@@ -388,9 +382,11 @@ engine::LaraController* Level::createItems(const std::vector<std::shared_ptr<ren
         if(const auto meshIdx = findAnimatedModelIndexForType(item.type))
         {
             //BOOST_ASSERT(!findSpriteSequenceForType(item.type));
-            BOOST_ASSERT(*meshIdx < skinnedMeshes.size());
+            BOOST_ASSERT(*meshIdx < m_animatedModels.size());
             std::shared_ptr<render::Entity> node = std::make_shared<render::Entity>();
-            node->addComponent(skinnedMeshes[*meshIdx].get());
+            for(const auto& bone : m_animatedModels[*meshIdx]->bones)
+                for(const auto& geo : bone.geometries)
+                    node->addComponent(geo.get());
 
             // Lara doesn't have a scene graph owner
             if( item.type != 0 )
@@ -410,7 +406,7 @@ engine::LaraController* Level::createItems(const std::vector<std::shared_ptr<ren
             //node->setDebugDataVisible(irr::scene::EDS_FULL);
             //node->setAnimationSpeed(30);
             //node->setLoopMode(false);
-            auto animationController = std::make_shared<engine::MeshAnimationController>(this, *m_animatedModels[*meshIdx], node, name + ":animator");
+            auto animationController = std::make_shared<engine::MeshAnimationController>(this, *m_animatedModels[*meshIdx], name + ":animator");
 
             if( item.type == 0 )
             {
@@ -520,87 +516,7 @@ engine::LaraController* Level::createItems(const std::vector<std::shared_ptr<ren
     return lara;
 }
 
-void Level::loadAnimFrame(uint32_t frameIdx, uint32_t frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, render::SkeletalMesh& skeletalMesh, gsl::not_null<const int16_t*>& pData, osg::BoundingBoxImpl<osg::Vec3i>& bbox)
-{
-    uint16_t angleSetOfs = 10;
-
-    for( size_t meshIdx = 0; meshIdx < model.meshCount; meshIdx++ )
-    {
-        gsl::not_null<std::shared_ptr<render::Bone>> bone = skeletalMesh.getBone(meshIdx);
-
-        osg::Vec3 pos;
-        if( meshIdx == 0 )
-        {
-            bbox._min = {pData[0], pData[2], pData[4]};
-            bbox._max = {pData[1], pData[3], pData[5]};
-            pos = osg::Vec3(pData[6], static_cast<float>(-pData[7]), pData[8]);
-        }
-        else
-        {
-            BOOST_ASSERT(model.boneTreeIndex + 4 * meshIdx <= m_boneTrees.size());
-            const int32_t* boneTreeData = &m_boneTrees[model.boneTreeIndex + (meshIdx - 1) * 4];
-            pos = osg::Vec3(static_cast<float>(boneTreeData[1]), static_cast<float>(-boneTreeData[2]), static_cast<float>(boneTreeData[3]));
-        }
-
-        auto temp2 = pData[angleSetOfs++];
-        auto temp1 = pData[angleSetOfs++];
-
-        osg::Vec3 rot;
-        rot.x() = static_cast<float>((temp1 & 0x3ff0) >> 4);
-        rot.y() = -static_cast<float>(((temp1 & 0x000f) << 6) | ((temp2 & 0xfc00) >> 10));
-        rot.z() = static_cast<float>(temp2 & 0x03ff);
-        rot *= 360 / 1024.0;
-
-        bone->addKeyframe(frameIdx + frameOffset, util::trRotationToQuat(rot), pos);
-    }
-
-    pData = pData.get() + animation.poseDataSize;
-}
-
-loader::AnimatedModel::FrameRange Level::loadAnimation(uint32_t& frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, render::SkeletalMesh& skeletalMesh)
-{
-    BOOST_ASSERT(animation.poseDataOffset % 2 == 0);
-    gsl::not_null<const int16_t*> pData = &m_poseData[animation.poseDataOffset / 2];
-    const int16_t* lastPData = nullptr;
-
-    osg::BoundingBoxImpl<osg::Vec3i> bbox;
-    // prepend the first frame
-    loadAnimFrame(0, frameOffset, model, animation, skeletalMesh, pData, bbox);
-    frameOffset += animation.stretchFactor;
-
-    const auto firstLinearFrame = frameOffset;
-
-    std::map<uint32_t, osg::BoundingBoxImpl<osg::Vec3i>> bboxes;
-    pData = &m_poseData[animation.poseDataOffset / 2];
-    for( uint32_t i = 0; i <= gsl::narrow<uint32_t>(animation.lastFrame - animation.firstFrame); i += animation.stretchFactor )
-    {
-        lastPData = pData;
-        loadAnimFrame(0, frameOffset, model, animation, skeletalMesh, pData, bbox);
-        bboxes.insert(std::make_pair(i, bbox));
-        frameOffset += animation.stretchFactor;
-    }
-
-    uint32_t framePatch = 0;
-    // is necessary, create pseudo-frames, because otherwise irrlicht thinks
-    // there's no animation at all
-    while( animation.firstFrame >= animation.lastFrame + framePatch )
-    {
-        pData = lastPData;
-        loadAnimFrame(0, frameOffset, model, animation, skeletalMesh, pData, bbox);
-        frameOffset += animation.stretchFactor;
-        ++framePatch;
-    }
-    BOOST_LOG_TRIVIAL(debug) << "Framepatch: " << animation.firstFrame << " / " << animation.lastFrame << " + " << framePatch;
-
-    // append the last frame again
-    pData = lastPData;
-    loadAnimFrame(0, frameOffset, model, animation, skeletalMesh, pData, bbox);
-    frameOffset += animation.stretchFactor;
-
-    return loader::AnimatedModel::FrameRange{firstLinearFrame, animation.firstFrame, animation.lastFrame + framePatch, std::move(bboxes)};
-}
-
-std::vector<std::shared_ptr<render::SkeletalMesh>> Level::createSkinnedMeshes(const std::vector<osg::ref_ptr<osg::Geometry>>& staticMeshes)
+void Level::createSkinnedMeshes(const std::vector<osg::ref_ptr<osg::Geode>>& meshes)
 {
     BOOST_ASSERT(!m_animatedModels.empty());
 
@@ -618,99 +534,16 @@ std::vector<std::shared_ptr<render::SkeletalMesh>> Level::createSkinnedMeshes(co
     }
     animStarts.insert(gsl::narrow<uint16_t>(m_animations.size()));
 
-    std::vector<std::shared_ptr<render::SkeletalMesh>> skeletalMeshes;
-
     for( const std::unique_ptr<loader::AnimatedModel>& model : m_animatedModels )
     {
         Expects(model != nullptr);
-        std::shared_ptr<render::SkeletalMesh> skeletalMesh = std::make_shared<render::SkeletalMesh>();
-        skeletalMeshes.emplace_back(skeletalMesh);
-
-        std::stack<std::shared_ptr<render::Bone>> parentStack;
-
-        for( size_t modelMeshIdx = 0; modelMeshIdx < model->meshCount; ++modelMeshIdx )
-        {
-            BOOST_ASSERT(model->firstMesh + modelMeshIdx < m_meshIndices.size());
-            const auto meshIndex = m_meshIndices[model->firstMesh + modelMeshIdx];
-            BOOST_ASSERT(meshIndex < staticMeshes.size());
-            const auto staticMesh = staticMeshes[meshIndex];
-            std::shared_ptr<render::Bone> bone = skeletalMesh->createBone();
-            if( model->type == 0 )
-            {
-                if( modelMeshIdx == 7 )
-                    bone->setName("chest");
-                else if( modelMeshIdx == 0 )
-                    bone->setName("hips");
-            }
-
-            // clone static mesh buffers to skinned mesh buffers
-            for( size_t meshBufIdx = 0; meshBufIdx < staticMesh->MeshBuffers.size(); ++meshBufIdx )
-            {
-                skeletalMesh->setVertexWeight()
-                gsl::not_null<irr::scene::SSkinMeshBuffer*> skinMeshBuffer = skinnedMesh->addMeshBuffer();
-                for( uint32_t i = 0; i < staticMesh->MeshBuffers[meshBufIdx]->getIndexCount(); ++i )
-                    skinMeshBuffer->Indices.push_back(staticMesh->MeshBuffers[meshBufIdx]->getIndices()[i]);
-
-                for( uint32_t i = 0; i < staticMesh->MeshBuffers[meshBufIdx]->getVertexCount(); ++i )
-                {
-                    skinMeshBuffer->Vertices_Standard.push_back(static_cast<irr::video::S3DVertex*>(staticMesh->MeshBuffers[meshBufIdx]->getVertices())[i]);
-
-                    auto w = skinnedMesh->addWeight(joint);
-                    w->buffer_id = skinnedMesh->getMeshBuffers().size() - 1;
-                    w->strength = 1.0f;
-                    w->vertex_id = i;
-                }
-
-                skinMeshBuffer->Material = staticMesh->MeshBuffers[meshBufIdx]->getMaterial();
-            }
-
-            if( modelMeshIdx == 0 )
-            {
-                parentStack.push(bone);
-                continue;
-            }
-
-            auto pred = skeletalMesh->getBone(modelMeshIdx - 1);
-
-            std::shared_ptr<render::Bone> parent = nullptr;
-            BOOST_ASSERT(model->boneTreeIndex + 4 * modelMeshIdx <= m_boneTrees.size());
-            const int32_t* boneTreeData = &m_boneTrees[model->boneTreeIndex + (modelMeshIdx - 1) * 4];
-
-            switch( boneTreeData[0] )
-            {
-            case 0: // use predecessor
-                parent = pred;
-                parent->addChild(*bone);
-                break;
-            case 2: // push
-                parent = pred;
-                parent->addChild(*bone);
-                parentStack.push(parent);
-                break;
-            case 1: // pop
-                if( parentStack.empty() )
-                    throw std::runtime_error("Invalid skeleton stack operation: cannot pop from empty stack");
-                parent = parentStack.top();
-                parent->addChild(*bone);
-                parentStack.pop();
-                break;
-            case 3: // top
-                if( parentStack.empty() )
-                    throw std::runtime_error("Invalid skeleton stack operation: cannot take top of empty stack");
-                parent = parentStack.top();
-                parent->addChild(*bone);
-                break;
-            default:
-                throw std::runtime_error("Invalid skeleton stack operation");
-            }
-        }
+        model->buildSkeleton(m_boneTrees, meshes, m_meshIndices);
 
         const auto currentAnimIt = animStarts.find(model->animationIndex);
 
         if( currentAnimIt == animStarts.end() )
             continue;
 
-        uint32_t currentAnimOffset = 0;
         const auto nextAnimIdx = *std::next(currentAnimIt);
 
         for( auto currentAnimIdx = model->animationIndex; currentAnimIdx < nextAnimIdx; ++currentAnimIdx )
@@ -718,20 +551,9 @@ std::vector<std::shared_ptr<render::SkeletalMesh>> Level::createSkinnedMeshes(co
             if( currentAnimIdx >= m_animations.size() )
                 continue;
 
-            const loader::Animation& animation = m_animations[currentAnimIdx];
-            model->frameMapping.emplace(std::make_pair(currentAnimIdx, loadAnimation(currentAnimOffset, *model, animation, *skeletalMesh)));
+            model->loadAnimation(m_animations[currentAnimIdx], m_poseData, m_boneTrees);
         }
-
-#ifndef NDEBUG
-        BOOST_LOG_TRIVIAL(debug) << "Model 0x" << std::hex << reinterpret_cast<uintptr_t>(model.get()) << std::dec << " frame mapping:";
-        for( const auto& fm : model->frameMapping )
-        {
-            BOOST_LOG_TRIVIAL(debug) << "  - anim " << fm.first << ": offset=" << fm.second.offset << ", first=" << fm.second.firstFrame << ", last=" << fm.second.lastFrame;
-        }
-#endif
     }
-
-    return skeletalMeshes;
 }
 
 osg::ref_ptr<osg::Texture2D> Level::createSolidColorTex(uint8_t color) const
@@ -743,8 +565,7 @@ osg::ref_ptr<osg::Texture2D> Level::createSolidColorTex(uint8_t color) const
     pixels[1][1] = pixels[0][0];
 
     osg::ref_ptr<osg::Image> img{ new osg::Image() };
-    img->allocateImage(2, 2, 0, GL_RGBA8, GL_FLOAT);
-    std::copy_n(&pixels[0][0], &pixels[0][0] + 2 * 2, reinterpret_cast<GLfloat*>(img->data()));
+    img->setImage(2, 2, 1, GL_RGBA, GL_RGBA, GL_FLOAT, reinterpret_cast<unsigned char*>(&pixels[0][0]), osg::Image::AllocationMode::NO_DELETE);
 
     osg::ref_ptr<osg::Texture2D> tex{ new osg::Texture2D() };
     tex->setImage(img);
@@ -779,7 +600,7 @@ void Level::toIrrlicht(osgViewer::Viewer& viewer)
 
     m_textureAnimator = std::make_shared<render::TextureAnimator>(m_animatedTextures);
 
-    std::vector<osg::ref_ptr<osg::Geometry>> staticMeshes;
+    std::vector<osg::ref_ptr<osg::Geode>> staticMeshes;
     for( size_t i = 0; i < m_meshes.size(); ++i )
     {
         staticMeshes.emplace_back(m_meshes[i].createMesh(m_textureProxies, materials, coloredMaterials, *m_textureAnimator));
@@ -790,9 +611,9 @@ void Level::toIrrlicht(osgViewer::Viewer& viewer)
         m_rooms[i].createSceneNode(i, *this, materials, textures, staticMeshes, *m_textureAnimator);
     }
 
-    auto skinnedMeshes = createSkinnedMeshes(staticMeshes);
+    createSkinnedMeshes(staticMeshes);
 
-    m_lara = createItems(skinnedMeshes, textures);
+    m_lara = createItems(textures);
     if(m_lara == nullptr)
         return;
 

@@ -109,9 +109,8 @@ namespace level
 
         std::vector<osg::ref_ptr<osg::Texture2D>> createTextures();
         loader::TextureLayoutProxy::MaterialMap createMaterials(const std::vector<osg::ref_ptr<osg::Texture2D>>& textures);
-        engine::LaraController* createItems(const std::vector<std::shared_ptr<render::SkeletalMesh>>& skinnedMeshes, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures);
-        std::vector<std::shared_ptr<render::SkeletalMesh>> createSkinnedMeshes(const std::vector<osg::ref_ptr<osg::Geometry>>& staticMeshes);
-        loader::AnimatedModel::FrameRange loadAnimation(uint32_t& frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, render::SkeletalMesh& skinnedMesh);
+        engine::LaraController* createItems(const std::vector<osg::ref_ptr<osg::Texture2D>>& textures);
+        void createSkinnedMeshes(const std::vector<osg::ref_ptr<osg::Geode>>& meshes);
         osg::ref_ptr<osg::Texture2D>createSolidColorTex(uint8_t color) const;
 
         void toIrrlicht(osgViewer::Viewer& viewer);
@@ -313,8 +312,6 @@ namespace level
 
         static void convertTexture(loader::ByteTexture& tex, loader::Palette& pal, loader::DWordTexture& dst);
         static void convertTexture(loader::WordTexture& tex, loader::DWordTexture& dst);
-
-        void loadAnimFrame(uint32_t frameIdx, uint32_t frameOffset, const loader::AnimatedModel& model, const loader::Animation& animation, render::SkeletalMesh& skeletalMesh, gsl::not_null<const int16_t*>& pData, osg::BoundingBoxImpl<osg::Vec3i>& bbox);
 
     private:
         static Game probeVersion(loader::io::SDLReader& reader, const std::string& filename);

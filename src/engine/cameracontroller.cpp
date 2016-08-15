@@ -667,8 +667,7 @@ namespace engine
 
         m_cameraPosition->setPosition(camPos.toIrrlicht());
         osg::Quat q;
-        q.makeRotate();
-        m_camera->setTarget(m_currentLookAt.position.toIrrlicht());
+        //! @fixme m_camera->setTarget(m_currentLookAt.position.toIrrlicht());
         m_cameraPosition->setAttitude(q);
     }
 
