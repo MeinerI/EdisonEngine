@@ -19,7 +19,9 @@ namespace loader
         {
             Expects(geom->getVertexArray()->getType() == osg::Array::Vec3ArrayType);
             Expects(geom->getNormalArray()->getType() == osg::Array::Vec3ArrayType);
+            Expects(geom->getNumTexCoordArrays() == 1);
             Expects(geom->getTexCoordArray(0)->getType() == osg::Array::Vec2ArrayType);
+            Expects(geom->getNumPrimitiveSets() == 1);
             Expects(geom->getPrimitiveSet(0)->getType() == osg::PrimitiveSet::DrawElementsUIntPrimitiveType);
 
             BOOST_ASSERT(srcVertexIndex < vertices.size());
@@ -56,11 +58,11 @@ namespace loader
             const TextureLayoutProxy& proxy = textureProxies.at(quad.proxyId);
             if(geometries.find(proxy.textureKey) == geometries.end())
             {
-                auto geom = new osg::Geometry();
+                osg::ref_ptr<osg::Geometry> geom = new osg::Geometry();
                 geom->setVertexArray(new osg::Vec3Array());
                 geom->setNormalArray(new osg::Vec3Array(), osg::Array::BIND_PER_VERTEX);
                 geom->setTexCoordArray(0, new osg::Vec2Array(), osg::Array::BIND_PER_VERTEX);
-                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
+                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, 3));
                 geometries[proxy.textureKey] = geom;
             }
             auto geom = geometries[proxy.textureKey];
@@ -86,7 +88,7 @@ namespace loader
                 geom->setVertexArray(new osg::Vec3Array());
                 geom->setNormalArray(new osg::Vec3Array(), osg::Array::BIND_PER_VERTEX);
                 geom->setTexCoordArray(0, new osg::Vec2Array(), osg::Array::BIND_PER_VERTEX);
-                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
+                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, 3));
                 geometries[tk] = geom;
             }
             auto geom = geometries[tk];
@@ -107,7 +109,7 @@ namespace loader
                 geom->setVertexArray(new osg::Vec3Array());
                 geom->setNormalArray(new osg::Vec3Array());
                 geom->setTexCoordArray(0, new osg::Vec2Array(), osg::Array::BIND_PER_VERTEX);
-                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
+                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, 3));
                 geometries[proxy.textureKey] = geom;
             }
             auto geom = geometries[proxy.textureKey];
@@ -129,13 +131,13 @@ namespace loader
                 geom->setVertexArray(new osg::Vec3Array());
                 geom->setNormalArray(new osg::Vec3Array(), osg::Array::BIND_PER_VERTEX);
                 geom->setTexCoordArray(0, new osg::Vec2Array(), osg::Array::BIND_PER_VERTEX);
-                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
+                geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, 3));
                 geometries[tk] = geom;
             }
-            auto buf = geometries[tk];
+            auto geom = geometries[tk];
 
             for( int i = 0; i < 3; ++i )
-                addVertex(buf, poly.vertices[i], nullptr, vertices, normals);
+                addVertex(geom, poly.vertices[i], nullptr, vertices, normals);
         }
 
         osg::ref_ptr<osg::Geode> result{new osg::Geode()};

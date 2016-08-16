@@ -22,7 +22,7 @@ GLuint addVertex(gsl::not_null<osg::ref_ptr<osg::Geometry>> geom, uint16_t verte
     auto posArray = static_cast<osg::Vec3Array*>(geom->getVertexArray());
     Expects(geom->getNormalArray()->getType() == osg::Array::Vec3ArrayType);
     auto normalsArray = static_cast<osg::Vec3Array*>(geom->getNormalArray());
-    Expects(geom->getTexCoordArray(0)->getType() == osg::Array::Vec3ArrayType);
+    Expects(geom->getTexCoordArray(0)->getType() == osg::Array::Vec2ArrayType);
     auto uvArray = static_cast<osg::Vec2Array*>(geom->getTexCoordArray(0));
     Expects(geom->getColorArray()->getType() == osg::Array::Vec4ArrayType);
     auto colorArray = static_cast<osg::Vec4Array*>(geom->getColorArray());
@@ -161,10 +161,11 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
         auto idx = level.findStaticMeshIndexById(sm.meshId);
         BOOST_ASSERT(idx >= 0);
         BOOST_ASSERT(static_cast<size_t>(idx) < staticMeshes.size());
-        render::Entity smNode(result);
-        smNode.addComponent(staticMeshes[idx].get());
-        smNode.setRotation({0,util::auToDeg(sm.rotation),0});
-        smNode.setPosition((sm.position - position).toIrrlicht());
+        auto smNode = std::make_shared<render::Entity>();
+        smNode->addComponent(staticMeshes[idx].get());
+        smNode->setRotation({0,util::auToDeg(sm.rotation),0});
+        smNode->setPosition((sm.position - position).toIrrlicht());
+        result->addChild(smNode);
     }
     result->setPosition(position.toIrrlicht());
 

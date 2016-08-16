@@ -5,7 +5,12 @@
 
 #include <osgAnimation/Animation>
 #include <osgAnimation/BasicAnimationManager>
+#include <osgAnimation/Bone>
+#include <osgAnimation/RigTransformSoftware>
+#include <osgAnimation/StackedQuaternionElement>
+#include <osgAnimation/StackedTranslateElement>
 #include <osgAnimation/Timeline>
+#include <osgAnimation/UpdateBone>
 
 #include <gsl.h>
 #include <boost/lexical_cast.hpp>
@@ -388,11 +393,13 @@ namespace loader
             {
                 const osg::ref_ptr<osgAnimation::QuatSphericalLinearChannel> rotationChannel = new osgAnimation::QuatSphericalLinearChannel();
                 rotationChannel->setTarget(bone.quatTransform->getOrCreateTarget());
+                rotationChannel->getOrCreateSampler();
                 animations.back().animation->addChannel(rotationChannel);
                 rotationChannels.emplace_back(rotationChannel);
 
                 const osg::ref_ptr<osgAnimation::Vec3LinearChannel> translationChannel = new osgAnimation::Vec3LinearChannel();
                 translationChannel->setTarget(bone.vecTransform->getOrCreateTarget());
+                translationChannel->getOrCreateSampler();
                 animations.back().animation->addChannel(translationChannel);
                 translationChannels.emplace_back(translationChannel);
             }

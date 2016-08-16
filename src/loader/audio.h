@@ -2,6 +2,7 @@
 
 #include "io/sdlreader.h"
 #include "level/game.h"
+#include "util.h"
 
 namespace loader
 {

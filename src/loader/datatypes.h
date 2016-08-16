@@ -1,23 +1,24 @@
 #pragma once
 
-#include "io/sdlreader.h"
-#include "util/helpers.h"
+#include "audio.h"
+#include "color.h"
 #include "core/angle.h"
 #include "core/coordinates.h"
+#include "core/magic.h"
 #include "floordata.h"
-#include "color.h"
-#include "primitives.h"
+#include "io/sdlreader.h"
 #include "meshes.h"
-#include "texture.h"
-#include "audio.h"
+#include "primitives.h"
 #include "render/entity.h"
+#include "texture.h"
+#include "util/helpers.h"
 
 #include <gsl.h>
 
 #include <array>
+#include <map>
 #include <stdexcept>
 #include <vector>
-#include <map>
 
 #include <boost/log/trivial.hpp>
 #include <boost/throw_exception.hpp>

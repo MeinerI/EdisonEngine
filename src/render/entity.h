@@ -1,22 +1,15 @@
 #pragma once
 
 #include "core/angle.h"
-#include "core/magic.h"
 
 #include <gsl.h>
 
 #include <osg/PositionAttitudeTransform>
 #include <osgAnimation/Animation>
-#include <osgAnimation/Bone>
 #include <osgAnimation/RigGeometry>
-#include <osgAnimation/RigTransformSoftware>
 #include <osgAnimation/Skeleton>
-#include <osgAnimation/StackedQuaternionElement>
-#include <osgAnimation/StackedTranslateElement>
-#include <osgAnimation/UpdateBone>
 
 #include <memory>
-#include <vector>
 
 
 namespace engine
@@ -47,7 +40,11 @@ namespace render
         explicit Entity(const std::weak_ptr<Entity>& parent)
             : m_parent{parent}
         {
-            m_parent.lock()->addChild(shared_from_this());
+            if(!m_parent.expired())
+            {
+                auto p = m_parent.lock();
+                p->addChild(shared_from_this());
+            }
         }
 
 
