@@ -1242,9 +1242,9 @@ namespace loader
 
             osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
             stateSet->setTextureAttributeAndModes(0, texture.get(), osg::StateAttribute::ON);
-            stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+            stateSet->setTextureMode(0, GL_BLEND, osg::StateAttribute::ON);
             stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-            stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
+            stateSet->setTextureAttributeAndModes(0, new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
 
             spriteGeometry->setStateSet(stateSet);
 

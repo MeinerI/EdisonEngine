@@ -594,6 +594,7 @@ void Level::toIrrlicht(osgViewer::Viewer& viewer)
         material->setColorMode(osg::Material::AMBIENT_AND_DIFFUSE);
         material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4());
         material->setShininess(osg::Material::Face::FRONT_AND_BACK, 20);
+        stateSet->setAttribute(material, osg::StateAttribute::ON);
 
         coloredMaterials.emplace_back(stateSet);
     }
@@ -621,8 +622,8 @@ void Level::toIrrlicht(osgViewer::Viewer& viewer)
     viewer.setCamera(camera);
     m_cameraController = new engine::CameraController(this, m_lara, camera);
     camera->setUpdateCallback(m_cameraController);
-    const auto aspect = viewer.getDisplaySettings()->getScreenWidth() / viewer.getDisplaySettings()->getScreenHeight();
-    camera->setProjectionMatrixAsPerspective(osg::DegreesToRadians(80 / aspect), aspect, 10, 20480);
+
+    viewer.realize();
 
     osgViewer::Viewer::Windows windows;
     viewer.getWindows(windows);
@@ -630,11 +631,21 @@ void Level::toIrrlicht(osgViewer::Viewer& viewer)
     if(windows.empty())
         BOOST_THROW_EXCEPTION(std::runtime_error("No windows found"));
 
-    camera->setGraphicsContext(windows[0]);
-    camera->setViewport(0, 0, windows[0]->getTraits()->width, windows[0]->getTraits()->height);
     windows[0]->setWindowName("EdisonEngine");
 
+    const auto aspect = windows[0]->getTraits()->width * 1.0f / windows[0]->getTraits()->height;
+    camera->setProjectionMatrixAsPerspective(osg::DegreesToRadians(80 / aspect), aspect, 10, 20480);
+
+    camera->setGraphicsContext(windows[0]);
+    camera->setViewport(0, 0, windows[0]->getTraits()->width, windows[0]->getTraits()->height);
+
     viewer.addSlave(camera, false);
+
+    osg::ref_ptr<osg::Group> g = new osg::Group();
+    for(const loader::Room& room : m_rooms)
+        g->addChild(room.node->getGroup());
+
+    viewer.setSceneData(g);
 
     //! @fixme set the scene to render
     // viewer.setSceneData(scene.get());

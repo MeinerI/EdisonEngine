@@ -51,6 +51,12 @@ namespace render
         virtual ~Entity() = default;
 
 
+        const osg::ref_ptr<osg::Group>& getGroup() const noexcept
+        {
+            return m_group;
+        }
+
+
         void setName(const std::string& name)
         {
             m_group->setName(name);

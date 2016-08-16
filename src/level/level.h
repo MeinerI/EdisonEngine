@@ -111,7 +111,7 @@ namespace level
         loader::TextureLayoutProxy::MaterialMap createMaterials(const std::vector<osg::ref_ptr<osg::Texture2D>>& textures);
         engine::LaraController* createItems(const std::vector<osg::ref_ptr<osg::Texture2D>>& textures);
         void createSkinnedMeshes(const std::vector<osg::ref_ptr<osg::Geode>>& meshes);
-        osg::ref_ptr<osg::Texture2D>createSolidColorTex(uint8_t color) const;
+        osg::ref_ptr<osg::Texture2D> createSolidColorTex(uint8_t color) const;
 
         void toIrrlicht(osgViewer::Viewer& viewer);
 

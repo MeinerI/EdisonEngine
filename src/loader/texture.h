@@ -6,6 +6,7 @@
 #include <osg/Material>
 #include <osg/Texture2D>
 #include <osg/BlendEquation>
+#include <osg/TexEnv>
 
 
 namespace loader
@@ -263,47 +264,52 @@ namespace loader
         {
             osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
             stateSet->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
+
+            osg::ref_ptr<osg::TexEnv> texEnv = new osg::TexEnv();
+            stateSet->setTextureAttributeAndModes(0, texEnv, osg::StateAttribute::ON);
+
             stateSet->setMode(GL_LIGHTING, osg::StateAttribute::ON);
 
             osg::ref_ptr<osg::Material> material = new osg::Material();
             material->setColorMode(osg::Material::AMBIENT_AND_DIFFUSE);
             material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4());
             material->setShininess(osg::Material::Face::FRONT_AND_BACK, 20);
+            stateSet->setAttribute(material, osg::StateAttribute::ON);
 
             switch( bmode )
             {
                 case BlendingMode::Solid:
-                    stateSet->setMode(GL_BLEND, osg::StateAttribute::OFF);
+                    texEnv->setMode(osg::TexEnv::DECAL);
                     stateSet->setRenderingHint(osg::StateSet::OPAQUE_BIN);
                     break;
 
                 case BlendingMode::AlphaTransparency:
-                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    texEnv->setMode(osg::TexEnv::BLEND);
                     stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
                     stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
                     break;
 
                 case BlendingMode::VertexColorTransparency: // Classic PC alpha
-                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    texEnv->setMode(osg::TexEnv::BLEND);
                     stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
                     stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
                     //! @fixme Use vertex alpha as source
                     break;
 
                 case BlendingMode::InvertSrc: // Inversion by src (PS darkness) - SAME AS IN TR3-TR5
-                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    texEnv->setMode(osg::TexEnv::BLEND);
                     stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
                     stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
                     break;
 
                 case BlendingMode::InvertDst: // Inversion by dest
-                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    texEnv->setMode(osg::TexEnv::BLEND);
                     stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
                     stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_REVERSE_SUBTRACT));
                     break;
 
                 case BlendingMode::Screen: // Screen (smoke, etc.)
-                    stateSet->setMode(GL_BLEND, osg::StateAttribute::ON);
+                    texEnv->setMode(osg::TexEnv::BLEND);
                     stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
                     stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
                     break;
@@ -315,7 +321,6 @@ namespace loader
                     BOOST_ASSERT(false); // FIXME [irrlicht]
             }
 
-            stateSet->setAttribute(material, osg::StateAttribute::ON);
             return stateSet;
         }
     };
