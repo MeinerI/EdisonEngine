@@ -363,7 +363,7 @@ namespace loader
                     osg::ref_ptr<osgAnimation::VertexInfluenceMap> influenceMap = new osgAnimation::VertexInfluenceMap();
                     osgAnimation::VertexInfluence& influence = (*influenceMap)[bones.back().osgBone->getName()];
 
-                    auto vertexCount = srcGeo->getVertexArray()->getDataSize();
+                    auto vertexCount = srcGeo->getVertexArray()->getNumElements();
                     for(decltype(vertexCount) j = 0; j < vertexCount; ++j)
                         influence.emplace_back(j, 1.0f);
 

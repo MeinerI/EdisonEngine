@@ -25,7 +25,7 @@ namespace loader
             Expects(geom->getPrimitiveSet(0)->getType() == osg::PrimitiveSet::DrawElementsUIntPrimitiveType);
 
             BOOST_ASSERT(srcVertexIndex < vertices.size());
-            const GLuint geometryVertexIdx = gsl::narrow<GLuint>(geom->getVertexArray()->getDataSize());
+            const GLuint geometryVertexIdx = gsl::narrow<GLuint>(geom->getVertexArray()->getNumElements());
             auto posArray = static_cast<osg::Vec3Array*>(geom->getVertexArray());
             posArray->push_back(vertices[srcVertexIndex].toIrrlicht());
             auto normalsArray = static_cast<osg::Vec3Array*>(geom->getNormalArray());

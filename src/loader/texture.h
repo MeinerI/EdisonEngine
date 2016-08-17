@@ -260,68 +260,6 @@ namespace loader
 
         using MaterialMap = std::map<TextureKey, osg::ref_ptr<osg::StateSet>>;
 
-        static osg::ref_ptr<osg::StateSet> createMaterial(const osg::ref_ptr<osg::Texture2D>& texture, BlendingMode bmode)
-        {
-            osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
-            stateSet->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
-
-            osg::ref_ptr<osg::TexEnv> texEnv = new osg::TexEnv();
-            stateSet->setTextureAttributeAndModes(0, texEnv, osg::StateAttribute::ON);
-
-            stateSet->setMode(GL_LIGHTING, osg::StateAttribute::ON);
-
-            osg::ref_ptr<osg::Material> material = new osg::Material();
-            material->setColorMode(osg::Material::AMBIENT_AND_DIFFUSE);
-            material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4());
-            material->setShininess(osg::Material::Face::FRONT_AND_BACK, 20);
-            stateSet->setAttribute(material, osg::StateAttribute::ON);
-
-            switch( bmode )
-            {
-                case BlendingMode::Solid:
-                    texEnv->setMode(osg::TexEnv::DECAL);
-                    stateSet->setRenderingHint(osg::StateSet::OPAQUE_BIN);
-                    break;
-
-                case BlendingMode::AlphaTransparency:
-                    texEnv->setMode(osg::TexEnv::BLEND);
-                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
-                    break;
-
-                case BlendingMode::VertexColorTransparency: // Classic PC alpha
-                    texEnv->setMode(osg::TexEnv::BLEND);
-                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
-                    //! @fixme Use vertex alpha as source
-                    break;
-
-                case BlendingMode::InvertSrc: // Inversion by src (PS darkness) - SAME AS IN TR3-TR5
-                    texEnv->setMode(osg::TexEnv::BLEND);
-                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
-                    break;
-
-                case BlendingMode::InvertDst: // Inversion by dest
-                    texEnv->setMode(osg::TexEnv::BLEND);
-                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_REVERSE_SUBTRACT));
-                    break;
-
-                case BlendingMode::Screen: // Screen (smoke, etc.)
-                    texEnv->setMode(osg::TexEnv::BLEND);
-                    stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
-                    stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
-                    break;
-
-                case BlendingMode::AnimatedTexture:
-                    break;
-
-                default: // opaque animated textures case
-                    BOOST_ASSERT(false); // FIXME [irrlicht]
-            }
-
-            return stateSet;
-        }
+        static osg::ref_ptr<osg::StateSet> createMaterial(const osg::ref_ptr<osg::Texture2D>& texture, BlendingMode bmode);
     };
 }

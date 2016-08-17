@@ -75,10 +75,17 @@ namespace
 }
 #endif
 
-int main()
+int main(int argc, char* argv[])
 {
+#ifndef NDEBUG
+    osg::setNotifyLevel(osg::NotifySeverity::ALWAYS);
+#endif
+
+    const int windowWidth = 1024;
+    const int windowHeight = 768;
+
     osgViewer::Viewer viewer;
-    viewer.setUpViewAcrossAllScreens();
+    viewer.setUpViewInWindow(0, 0, windowWidth, windowHeight);
 
     struct LevelInfo
     {
@@ -118,8 +125,6 @@ int main()
     if(lvlInfo.track > 0)
         lvl->playCdTrack(lvlInfo.track);
 
-    viewer.realize();
-
     while(!viewer.done())
     {
         lvl->m_audioDev.update();
@@ -156,8 +161,6 @@ int main()
         device->setWindowCaption(str.c_str());
 #endif
     }
-
-    //device->drop();
 
     return EXIT_SUCCESS;
 }

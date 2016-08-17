@@ -30,7 +30,7 @@ GLuint addVertex(gsl::not_null<osg::ref_ptr<osg::Geometry>> geom, uint16_t verte
     auto idxArray = static_cast<osg::DrawElementsUInt*>(geom->getPrimitiveSet(0));
 
     BOOST_ASSERT(vertexIndex < vertices.size());
-    const GLuint geometryVertexIdx = gsl::narrow<GLuint>(geom->getVertexArray()->getDataSize());
+    const GLuint geometryVertexIdx = gsl::narrow<GLuint>(geom->getVertexArray()->getNumElements());
     posArray->push_back( vertices[vertexIndex].vertex.toIrrlicht() );
     // TR5 only: iv.Normal = vertices[vertexIndex].normal.toIrrlicht();
     normalsArray->push_back( { 1,0,0 } );
@@ -272,4 +272,69 @@ void Room::patchHeightsForBlock(const engine::ItemController& ctrl, int height)
         box.overlap_index |= 0x4000;
 }
 
+osg::ref_ptr<osg::StateSet> TextureLayoutProxy::createMaterial(const osg::ref_ptr<osg::Texture2D>& texture, BlendingMode bmode)
+{
+    osg::ref_ptr<osg::StateSet> stateSet = new osg::StateSet();
+    stateSet->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
+
+    osg::ref_ptr<osg::TexEnv> texEnv = new osg::TexEnv();
+    stateSet->setTextureAttributeAndModes(0, texEnv, osg::StateAttribute::ON);
+
+    //stateSet->setMode(GL_LIGHTING, osg::StateAttribute::ON);
+
+    osg::ref_ptr<osg::Material> material = new osg::Material();
+    material->setColorMode(osg::Material::AMBIENT_AND_DIFFUSE);
+    material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4(1, 1, 1, 1));
+    material->setShininess(osg::Material::Face::FRONT_AND_BACK, 20);
+    stateSet->setAttribute(material, osg::StateAttribute::ON);
+
+    return stateSet;
+
+    switch(bmode)
+    {
+        case BlendingMode::Solid:
+            texEnv->setMode(osg::TexEnv::DECAL);
+            stateSet->setRenderingHint(osg::StateSet::OPAQUE_BIN);
+            break;
+
+        case BlendingMode::AlphaTransparency:
+            texEnv->setMode(osg::TexEnv::BLEND);
+            stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+            stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
+            break;
+
+        case BlendingMode::VertexColorTransparency: // Classic PC alpha
+            texEnv->setMode(osg::TexEnv::BLEND);
+            stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+            stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_ADD));
+            //! @fixme Use vertex alpha as source
+            break;
+
+        case BlendingMode::InvertSrc: // Inversion by src (PS darkness) - SAME AS IN TR3-TR5
+            texEnv->setMode(osg::TexEnv::BLEND);
+            stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+            stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
+            break;
+
+        case BlendingMode::InvertDst: // Inversion by dest
+            texEnv->setMode(osg::TexEnv::BLEND);
+            stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+            stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_REVERSE_SUBTRACT));
+            break;
+
+        case BlendingMode::Screen: // Screen (smoke, etc.)
+            texEnv->setMode(osg::TexEnv::BLEND);
+            stateSet->setRenderingHint(osg::StateSet::TRANSPARENT_BIN);
+            stateSet->setAttributeAndModes(new osg::BlendEquation(osg::BlendEquation::FUNC_SUBTRACT));
+            break;
+
+        case BlendingMode::AnimatedTexture:
+            break;
+
+        default: // opaque animated textures case
+            BOOST_ASSERT(false); // FIXME [irrlicht]
+    }
+
+    return stateSet;
+}
 }
