@@ -29,12 +29,13 @@
 #include "tr3level.h"
 #include "tr4level.h"
 #include "tr5level.h"
-#include "util/vmath.h"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/range/adaptors.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
+
+#include <osgDB/WriteFile>
 
 #include <algorithm>
 #include <set>
@@ -386,7 +387,7 @@ engine::LaraController* Level::createItems(const std::vector<osg::ref_ptr<osg::T
             std::shared_ptr<render::Entity> node = std::make_shared<render::Entity>();
             for(const auto& bone : m_animatedModels[*meshIdx]->bones)
                 for(const auto& geo : bone.geometries)
-                    node->addComponent(geo.get());
+                    node->addDrawable(geo.get());
 
             // Lara doesn't have a scene graph owner
             if( item.type != 0 )
@@ -501,7 +502,7 @@ engine::LaraController* Level::createItems(const std::vector<osg::ref_ptr<osg::T
             node->setName(name.c_str());
 
             auto e = std::make_shared<render::Entity>();
-            e->addComponent(node.get());
+            e->addDrawable(node.get());
 
             m_itemControllers[id] = std::make_unique<engine::DummyItemController>(this, nullptr, e, name + ":controller", &room, &item);
             m_itemControllers[id]->setYRotation(core::Angle{ item.rotation });
@@ -572,7 +573,7 @@ osg::ref_ptr<osg::Texture2D> Level::createSolidColorTex(uint8_t color) const
     return tex;
 }
 
-void Level::toIrrlicht(osgViewer::Viewer& viewer)
+std::unique_ptr<osgViewer::Viewer> Level::toIrrlicht()
 {
     //! @fixme device->getSceneManager()->getVideoDriver()->setFog(WaterColor, irr::video::EFT_FOG_LINEAR, 1024, 1024 * 20, .003f, true, false);
     //! @fixme device->getSceneManager()->getVideoDriver()->setTextureCreationFlag(irr::video::ETCF_CREATE_MIP_MAPS, false);
@@ -616,39 +617,22 @@ void Level::toIrrlicht(osgViewer::Viewer& viewer)
 
     m_lara = createItems(textures);
     if(m_lara == nullptr)
-        return;
+        return nullptr;
 
-    osg::ref_ptr<osg::Camera> camera = new osg::Camera();
-    viewer.setCamera(camera);
+    std::unique_ptr<osgViewer::Viewer> viewer{ new osgViewer::Viewer() };
+
+    osg::ref_ptr<osg::Camera> camera = viewer->getCamera();
     m_cameraController = new engine::CameraController(this, m_lara, camera);
     camera->setUpdateCallback(m_cameraController);
 
-    viewer.realize();
-
-    osgViewer::Viewer::Windows windows;
-    viewer.getWindows(windows);
-
-    if(windows.empty())
-        BOOST_THROW_EXCEPTION(std::runtime_error("No windows found"));
-
-    windows[0]->setWindowName("EdisonEngine");
-
-    const auto aspect = windows[0]->getTraits()->width * 1.0f / windows[0]->getTraits()->height;
-    camera->setProjectionMatrixAsPerspective(osg::DegreesToRadians(80 / aspect), aspect, 10, 20480);
-
-    camera->setGraphicsContext(windows[0]);
-    camera->setViewport(0, 0, windows[0]->getTraits()->width, windows[0]->getTraits()->height);
-
-    viewer.addSlave(camera, false);
-
+    //! @fixme set the correct scene to render
     osg::ref_ptr<osg::Group> g = new osg::Group();
     for(const loader::Room& room : m_rooms)
         g->addChild(room.node->getGroup());
 
-    viewer.setSceneData(g);
+    viewer->setSceneData(g);
 
-    //! @fixme set the scene to render
-    // viewer.setSceneData(scene.get());
+    osgDB::writeObjectFile(*g, "foo.obj");
 
     for(const loader::SoundSource& src : m_soundSources)
     {
@@ -656,6 +640,8 @@ void Level::toIrrlicht(osgViewer::Viewer& viewer)
         handle->setLooping(true);
         m_audioDev.registerSource(handle);
     }
+
+    return viewer;
 }
 
 void Level::convertTexture(loader::ByteTexture& tex, loader::Palette& pal, loader::DWordTexture& dst)

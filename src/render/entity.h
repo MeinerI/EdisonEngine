@@ -5,9 +5,9 @@
 #include <gsl.h>
 
 #include <osg/PositionAttitudeTransform>
+#include <osg/Geode>
 #include <osgAnimation/Animation>
 #include <osgAnimation/RigGeometry>
-#include <osgAnimation/Skeleton>
 
 #include <memory>
 
@@ -27,20 +27,23 @@ namespace render
         std::set<std::shared_ptr<Entity>> m_children;
 
         osg::ref_ptr<osg::PositionAttitudeTransform> m_transform = new osg::PositionAttitudeTransform();
-        osg::ref_ptr<osg::Group> m_group = new osg::Group();
+        osg::ref_ptr<osg::Geode> m_geode = new osg::Geode();
 
         std::shared_ptr<engine::ItemController> m_controller = nullptr;
 
     public:
         explicit Entity()
         {
+            m_transform->addChild(m_geode);
         }
 
 
         explicit Entity(const std::weak_ptr<Entity>& parent)
             : m_parent{parent}
         {
-            if(!m_parent.expired())
+            m_transform->addChild(m_geode);
+
+            if( !m_parent.expired() )
             {
                 auto p = m_parent.lock();
                 p->addChild(shared_from_this());
@@ -51,43 +54,58 @@ namespace render
         virtual ~Entity() = default;
 
 
-        const osg::ref_ptr<osg::Group>& getGroup() const noexcept
+        osg::Group* getGroup() const noexcept
         {
-            return m_group;
+            return m_transform->asGroup();
         }
 
 
         void setName(const std::string& name)
         {
-            m_group->setName(name);
+            m_geode->setName(name);
+            m_transform->setName(name);
         }
 
 
-        void setParent(const std::shared_ptr<Entity>& entity)
+        void addChild(const std::shared_ptr<Entity>& newChild)
+        {
+            if( !newChild->m_parent.expired() )
+            {
+                newChild->m_parent.lock()->removeChild(newChild);
+            }
+
+            m_children.insert(newChild);
+
+            if( !newChild->m_parent.expired() )
+            {
+                newChild->m_parent = shared_from_this();
+                m_transform->addChild(newChild->m_transform);
+            }
+        }
+
+
+        void removeChild(const std::shared_ptr<Entity>& child)
+        {
+            m_children.erase(child);
+            m_transform->removeChild(child->m_transform);
+        }
+
+
+        void setParent(const std::shared_ptr<Entity>& newParent)
         {
             if( !m_parent.expired() )
-                m_parent.lock()->m_children.erase(shared_from_this());
+                m_parent.lock()->removeChild(shared_from_this());
 
-            m_parent = entity;
+            m_parent = newParent;
 
-            if( entity != nullptr )
-                entity->m_children.insert(shared_from_this());
+            if( !m_parent.expired() )
+                m_parent.lock()->addChild(shared_from_this());
         }
 
 
-        void addChild(const std::shared_ptr<Entity>& child)
+        void addDrawable(const gsl::not_null<osg::Drawable*>& drawable)
         {
-            if( !child->m_parent.expired() )
-                child->m_parent.lock()->m_children.erase(child);
-
-            m_children.insert(child);
-            child->m_parent = shared_from_this();
-        }
-
-
-        void addComponent(const gsl::not_null<osg::Node*>& drawable)
-        {
-            m_group->addChild(drawable);
+            m_geode->addDrawable(drawable);
         }
 
 
@@ -112,13 +130,13 @@ namespace render
 
         const std::string& getName() const
         {
-            return m_group->getName();
+            return m_transform->getName();
         }
 
 
         void setVisible(bool visible)
         {
-            m_group->setNodeMask(visible ? osg::Node::NodeMask(0) : ~osg::Node::NodeMask(0));
+            m_geode->setNodeMask(visible ? osg::Node::NodeMask(0) : ~osg::Node::NodeMask(0));
         }
     };
 }

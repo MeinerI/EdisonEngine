@@ -46,6 +46,8 @@ GLuint addVertex(gsl::not_null<osg::ref_ptr<osg::Geometry>> geom, uint16_t verte
 
 std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::Level& level, const loader::TextureLayoutProxy::MaterialMap& materials, const std::vector<osg::ref_ptr<osg::Texture2D>>& textures, const std::vector<osg::ref_ptr<osg::Geode>>& staticMeshes, render::TextureAnimator& animator)
 {
+    Expects(node == nullptr);
+
     // texture => mesh buffer
     std::map<TextureLayoutProxy::TextureKey, osg::ref_ptr<osg::Geometry>> geometries;
     for(const QuadFace& quad : rectangles)
@@ -58,7 +60,7 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
             geom->setNormalArray(new osg::Vec3Array(), osg::Array::BIND_PER_VERTEX);
             geom->setColorArray(new osg::Vec4Array(), osg::Array::BIND_PER_VERTEX);
             geom->setTexCoordArray(0, new osg::Vec2Array(), osg::Array::BIND_PER_VERTEX);
-            geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, 0));
+            geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES));
             geometries[proxy.textureKey] = geom;
         }
         auto geom = geometries[proxy.textureKey];
@@ -80,7 +82,7 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
             geom->setNormalArray(new osg::Vec3Array(), osg::Array::BIND_PER_VERTEX);
             geom->setColorArray(new osg::Vec4Array(), osg::Array::BIND_PER_VERTEX);
             geom->setTexCoordArray(0, new osg::Vec2Array(), osg::Array::BIND_PER_VERTEX);
-            geom->addPrimitiveSet(new osg::DrawElementsUInt(osg::PrimitiveSet::TRIANGLES, 0));
+            geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::TRIANGLES));
             geometries[proxy.textureKey] = geom;
         }
         auto geom = geometries[proxy.textureKey];
@@ -89,11 +91,11 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
             animator.registerVertex(poly.proxyId, geom, i, addVertex(geom, poly.vertices[i], proxy.uvCoordinates[i], vertices));
     }
 
-    auto result = std::make_shared<render::Entity>();
+    node = std::make_shared<render::Entity>();
     osg::ref_ptr<osg::Group> resultGrp{ new osg::Group() };
-    for(auto& buffer : geometries)
+    for(auto& geom : geometries)
     {
-        auto it = materials.find(buffer.first);
+        auto it = materials.find(geom.first);
         BOOST_ASSERT(it != materials.end());
         auto material = it->second;
         BOOST_LOG_TRIVIAL(debug) << "Darkness=" << darkness;
@@ -102,10 +104,11 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
             //! @fixme Clone me
             material->setMode(GL_FOG, osg::StateAttribute::ON);
         }
-        buffer.second->setStateSet(material.get());
-        result->addComponent(buffer.second.get());
+        geom.second->setStateSet(material.get());
+        node->addDrawable(geom.second.get());
     }
 
+    osg::ref_ptr<osg::Group> lightGroup = new osg::Group();
     for(Light& light : lights)
     {
         osg::ref_ptr<osg::LightSource> src{ new osg::LightSource() };
@@ -153,8 +156,10 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
         light.node->setDirection(light.dir.toIrrlicht());
         light.node->setSpotCutoff(light.specularFade * 2);
         light.node->setLinearAttenuation(1.0f / light.specularFade);
-        result->addComponent(src.get());
+        lightGroup->addChild(src.get());
     }
+
+    node->getGroup()->addChild(lightGroup.get());
 
     for(const RoomStaticMesh& sm : this->staticMeshes)
     {
@@ -162,14 +167,14 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
         BOOST_ASSERT(idx >= 0);
         BOOST_ASSERT(static_cast<size_t>(idx) < staticMeshes.size());
         auto smNode = std::make_shared<render::Entity>();
-        smNode->addComponent(staticMeshes[idx].get());
+        smNode->getGroup()->addChild(staticMeshes[idx].get());
         smNode->setRotation({0,util::auToDeg(sm.rotation),0});
         smNode->setPosition((sm.position - position).toIrrlicht());
-        result->addChild(smNode);
+        node->addChild(smNode);
     }
-    result->setPosition(position.toIrrlicht());
+    node->setPosition(position.toIrrlicht());
 
-    result->setName(("Room:" + boost::lexical_cast<std::string>(roomId)).c_str());
+    node->setName(("Room:" + boost::lexical_cast<std::string>(roomId)).c_str());
 
     for(const Sprite& sprite : sprites)
     {
@@ -183,13 +188,12 @@ std::shared_ptr<render::Entity> Room::createSceneNode(int roomId, const level::L
         bb->setAxis(osg::Y_AXIS);
 
         osg::ref_ptr<osg::Geometry> spriteGeometry = tex.buildGeometry(textures[tex.texture]);
-        result->addComponent(spriteGeometry.get());
+        node->addDrawable(spriteGeometry.get());
     }
 
     // resultNode->addShadowVolumeSceneNode();
-    node = result;
 
-    return result;
+    return node;
 }
 
 osg::ref_ptr<osg::Texture2D> DWordTexture::toTexture()
@@ -287,8 +291,6 @@ osg::ref_ptr<osg::StateSet> TextureLayoutProxy::createMaterial(const osg::ref_pt
     material->setAmbient(osg::Material::FRONT_AND_BACK, osg::Vec4(1, 1, 1, 1));
     material->setShininess(osg::Material::Face::FRONT_AND_BACK, 20);
     stateSet->setAttribute(material, osg::StateAttribute::ON);
-
-    return stateSet;
 
     switch(bmode)
     {

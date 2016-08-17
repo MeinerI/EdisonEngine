@@ -113,7 +113,7 @@ namespace level
         void createSkinnedMeshes(const std::vector<osg::ref_ptr<osg::Geode>>& meshes);
         osg::ref_ptr<osg::Texture2D> createSolidColorTex(uint8_t color) const;
 
-        void toIrrlicht(osgViewer::Viewer& viewer);
+        std::unique_ptr<osgViewer::Viewer> toIrrlicht();
 
         gsl::not_null<const loader::Sector*> findFloorSectorWithClampedPosition(const core::TRCoordinates& position, gsl::not_null<const loader::Room*> room) const
         {

@@ -83,9 +83,22 @@ int main(int argc, char* argv[])
 
     const int windowWidth = 1024;
     const int windowHeight = 768;
+    const std::string version("4.2");
 
-    osgViewer::Viewer viewer;
-    viewer.setUpViewInWindow(0, 0, windowWidth, windowHeight);
+    osg::ref_ptr< osg::GraphicsContext::Traits > traits = new osg::GraphicsContext::Traits();
+    traits->x = 20; traits->y = 30;
+    traits->width = windowWidth;
+    traits->height = windowHeight;
+    traits->windowDecoration = true;
+    traits->doubleBuffer = true;
+    traits->glContextVersion = version;
+    osg::ref_ptr< osg::GraphicsContext > gc = osg::GraphicsContext::createGraphicsContext(traits.get());
+
+    if(!gc.valid())
+    {
+        BOOST_LOG_TRIVIAL(fatal) << "Unable to create OpenGL v" << version << " context.";
+        return EXIT_FAILURE;
+    }
 
     struct LevelInfo
     {
@@ -120,12 +133,22 @@ int main(int argc, char* argv[])
 
     BOOST_ASSERT(lvl != nullptr);
     lvl->load();
-    lvl->toIrrlicht(viewer);
+    auto viewer = lvl->toIrrlicht();
+
+    viewer->getCamera()->setGraphicsContext(gc);
+    gc->getState()->setUseModelViewAndProjectionUniforms(true);
+    gc->getState()->setUseVertexAttributeAliasing(true);
+
+    const auto aspect = windowWidth * 1.0f / windowHeight;
+    viewer->getCamera()->setProjectionMatrixAsPerspective(osg::DegreesToRadians(80 / aspect), aspect, 10, 20480);
+    viewer->getCamera()->setViewport(0, 0, windowWidth, windowHeight);
+
+    viewer->realize();
 
     if(lvlInfo.track > 0)
         lvl->playCdTrack(lvlInfo.track);
 
-    while(!viewer.done())
+    while(!viewer->done())
     {
         lvl->m_audioDev.update();
 
@@ -146,7 +169,7 @@ int main(int argc, char* argv[])
                                              lvl->m_cameraController->getFrontVector(),
                                              lvl->m_cameraController->getUpVector());
 
-        viewer.frame();
+        viewer->frame();
 
         lvl->drawBars();
 
